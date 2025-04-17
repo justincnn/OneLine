@@ -72,3 +72,4 @@ NEXT_PUBLIC_ACCESS_PASSWORD=your_access_password_here
 
 ## 友情项目
 - [@snailyp](https://github.com/snailyp)大佬的[gemini轮询代理服务](https://github.com/snailyp/gemini-balance) 本项目的Demo站后端API服务也是使用大佬的项目，太强了🤗
+,
