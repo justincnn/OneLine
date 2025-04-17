@@ -1,9 +1,7 @@
 ## 一线 (OneLine)
 
-一线是一个热点事件时间轴分析工具，它可以帮助用户快速了解重大事件的发展脉络并提供AI辅助分析。
-### [Demo站点](https://oneline.chengtx.me)
-![image](https://github.com/user-attachments/assets/6d20acf8-c4a7-4a52-9849-1d526ec50ba7)
-![image](https://github.com/user-attachments/assets/1b8adf2c-2223-4ba5-94bd-0c223889fd1b)
+一线是一个热点事件时间轴分析工具，它可以帮助用户快速了解重大事件的发展脉络并提供AI辅助分析。[Demo站点](https://oneline.chengtx.me)
+![image](https://github.com/user-attachments/assets/a16f198f-ee6d-4c6b-b212-00f212641cf0)
 
 ## 主要功能
 
@@ -21,11 +19,58 @@
 - Tailwind CSS
 - shadcn/ui 组件库
 
-## Docker部署
-感谢 [@justincnn](https://github.com/justincnn) 佬构建的镜像
+## 开发
+
+```bash
+# 安装依赖
+npm install
+
+# 启动开发服务器
+npm run dev
 ```
-docker pull justincnn/oneline
+
+## 构建
+
+```bash
+# 构建生产版本
+npm run build
 ```
+
+## Docker 部署
+
+### 使用 Docker Compose（推荐）
+
+1. 确保您的系统已安装 Docker 和 Docker Compose
+2. 克隆此仓库
+3. 在项目根目录执行以下命令：
+
+```bash
+# 构建并启动容器
+docker-compose up -d
+
+# 查看日志
+docker-compose logs -f
+```
+
+### 使用 Docker 命令
+
+1. 构建 Docker 镜像：
+
+```bash
+docker build -t oneline:latest .
+```
+
+2. 运行容器：
+
+```bash
+docker run -p 3000:3000 -d oneline:latest
+```
+
+3. 访问 http://localhost:3000 查看应用
+
+## GitHub Actions 自动构建和发布
+
+本项目配置了 GitHub Actions 工作流，可以自动构建 Docker 镜像并发布到 Docker Hub。每次推送到 main 分支时，都会触发自动构建和发布流程。
 
 ## 配置
 
@@ -45,15 +90,14 @@ docker pull justincnn/oneline
 2. 在`.env.local`文件中填入你的配置：
 
 ```
-# 服务器端环境变量
 # API端点配置
-API_ENDPOINT=https://api.example.com/v1/chat/completions
+NEXT_PUBLIC_API_ENDPOINT=https://api.example.com/v1/chat/completions
 
 # API模型配置
-API_MODEL=gemini-2.0-pro-exp-search
+NEXT_PUBLIC_API_MODEL=gemini-2.0-pro-exp-search
 
 # API密钥配置
-API_KEY=your_api_key_here
+NEXT_PUBLIC_API_KEY=your_api_key_here
 
 # 是否允许用户在前端配置API设置
 # 设置为"false"将禁止用户在前端修改API设置
@@ -72,14 +116,3 @@ NEXT_PUBLIC_ACCESS_PASSWORD=your_access_password_here
 - 当`NEXT_PUBLIC_ALLOW_USER_CONFIG`设置为`false`时，用户将无法在前端修改API设置
 - 当设置了`NEXT_PUBLIC_ACCESS_PASSWORD`时，用户需要输入正确的密码才能访问API设置
 - 当未设置环境变量时，将使用前端用户配置的设置
-
-### Vercel 部署注意事项
-
-在 Vercel 上部署时，请确保：
-
-1. 在 Vercel 项目设置中配置环境变量（API_KEY、API_ENDPOINT 等）
-2. 不要在 Vercel 项目设置中启用"静态构建"选项
-
-## 友情项目
-- [@snailyp](https://github.com/snailyp)大佬的[gemini轮询代理服务](https://github.com/snailyp/gemini-balance) 本项目的Demo站后端API服务也是使用大佬的项目，太强了🤗
-,

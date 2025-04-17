@@ -1,0 +1,15 @@
+node_modules
+.next
+out
+.git
+.github
+.husky
+.vscode
+README.md
+.env
+.env.*
+!.env.example
+npm-debug.log*
+*.log
+.DS_Store
+.direnv 
