@@ -11,6 +11,47 @@
 - AI分析功能，提供事件的深入背景、过程、影响分析
 - 标记事件信息来源，增强可信度
 
+## 快速开始（Docker）
+
+无需克隆代码库，直接使用预构建的Docker镜像快速部署：
+
+```bash
+# 从Docker Hub拉取镜像
+docker pull justincnn/oneline:latest
+
+# 运行容器
+docker run -p 1212:3000 -d justincnn/oneline:latest
+```
+
+或者使用docker-compose（推荐）：
+
+1. 创建docker-compose.yml文件，内容如下：
+
+```yaml
+version: '3'
+
+services:
+  oneline:
+    image: justincnn/oneline:latest
+    ports:
+      - "1212:3000"
+    environment:
+      - NODE_ENV=production
+      # 可以在这里添加您的环境变量
+      # - NEXT_PUBLIC_API_ENDPOINT=your_api_endpoint
+      # - NEXT_PUBLIC_API_MODEL=your_api_model
+      # - NEXT_PUBLIC_API_KEY=your_api_key
+    restart: always
+```
+
+2. 运行以下命令：
+
+```bash
+docker-compose up -d
+```
+
+3. 访问 http://localhost:1212 查看应用
+
 ## 技术栈
 
 - Next.js
@@ -36,13 +77,32 @@ npm run dev
 npm run build
 ```
 
-## Docker 部署
+## 从源码构建Docker镜像（可选）
 
-### 使用 Docker Compose（推荐）
+如果您想自己构建Docker镜像，可以按照以下步骤操作：
+
+### 使用 Docker Compose
 
 1. 确保您的系统已安装 Docker 和 Docker Compose
 2. 克隆此仓库
-3. 在项目根目录执行以下命令：
+3. 修改docker-compose.yml文件，将image改为build配置：
+
+```yaml
+version: '3'
+
+services:
+  oneline:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "1212:3000"
+    environment:
+      - NODE_ENV=production
+    restart: always
+```
+
+4. 在项目根目录执行以下命令：
 
 ```bash
 # 构建并启动容器
@@ -63,14 +123,8 @@ docker build -t oneline:latest .
 2. 运行容器：
 
 ```bash
-docker run -p 3000:3000 -d oneline:latest
+docker run -p 1212:3000 -d oneline:latest
 ```
-
-3. 访问 http://localhost:3000 查看应用
-
-## GitHub Actions 自动构建和发布
-
-本项目配置了 GitHub Actions 工作流，可以自动构建 Docker 镜像并发布到 Docker Hub。每次推送到 main 分支时，都会触发自动构建和发布流程。
 
 ## 配置
 
@@ -86,8 +140,8 @@ docker run -p 3000:3000 -d oneline:latest
 
 除了前端配置外，你还可以通过环境变量来配置API设置。这对于部署环境特别有用，可以避免将敏感信息暴露给用户。
 
-1. 复制项目根目录下的`.env.example`文件为`.env.local`
-2. 在`.env.local`文件中填入你的配置：
+1. 复制项目根目录下的`.env.example`文件为`.env.local`，或者在Docker环境中通过环境变量提供配置
+2. 配置以下环境变量：
 
 ```
 # API端点配置

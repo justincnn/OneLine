@@ -1,0 +1,19 @@
+version: '3'
+
+services:
+  oneline:
+    image: justincnn/oneline:latest
+    ports:
+      - "1212:3000"
+    environment:
+      - NODE_ENV=production
+      # 可以在这里添加您的环境变量
+      # - NEXT_PUBLIC_API_ENDPOINT=your_api_endpoint
+      # - NEXT_PUBLIC_API_MODEL=your_api_model
+      # - NEXT_PUBLIC_API_KEY=your_api_key
+      # - NEXT_PUBLIC_ALLOW_USER_CONFIG=true
+      # - NEXT_PUBLIC_ACCESS_PASSWORD=your_access_password_here
+    restart: always
+    # 可选：如果需要持久化存储，取消下面注释
+    # volumes:
+    #   - ./data:/app/data 
