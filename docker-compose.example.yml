@@ -7,10 +7,17 @@ services:
       - "1212:3000"
     environment:
       - NODE_ENV=production
-      # 可以在这里添加您的环境变量
-      # - NEXT_PUBLIC_API_ENDPOINT=your_api_endpoint
-      # - NEXT_PUBLIC_API_MODEL=your_api_model
-      # - NEXT_PUBLIC_API_KEY=your_api_key
+      # API配置（二选一配置方式）
+      # 方式1：使用外部API服务（如OpenAI、Google Gemini等）
+      # - NEXT_PUBLIC_API_ENDPOINT=https://api.example.com/v1/chat/completions
+      # - NEXT_PUBLIC_API_MODEL=gemini-2.0-pro-exp-search
+      # - NEXT_PUBLIC_API_KEY=your_api_key_here
+      
+      # 方式2：使用SearXNG搜索增强（推荐）
+      # - NEXT_PUBLIC_SEARXNG_URL=https://sousuo.emoe.top
+      # - NEXT_PUBLIC_SEARXNG_ENABLED=true
+      
+      # 安全设置
       # - NEXT_PUBLIC_ALLOW_USER_CONFIG=true
       # - NEXT_PUBLIC_ACCESS_PASSWORD=your_access_password_here
     restart: always
