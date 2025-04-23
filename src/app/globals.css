@@ -243,3 +243,71 @@
 .loading-spinner {
   @apply h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin;
 }
+
+/* 流式输出的加载动画 */
+.loading-dots {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.loading-dots .dot {
+  width: 8px;
+  height: 8px;
+  margin: 0 4px;
+  border-radius: 50%;
+  background-color: hsl(var(--primary));
+  animation: dot-pulse 1.5s infinite ease-in-out;
+}
+
+.loading-dots .dot:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.loading-dots .dot:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes dot-pulse {
+  0%, 100% {
+    transform: scale(0.8);
+    opacity: 0.5;
+  }
+  50% {
+    transform: scale(1.2);
+    opacity: 1;
+  }
+}
+
+/* 流式事件卡片的动画 */
+.timeline-card-streaming {
+  animation: fade-slide-up 0.5s ease-out forwards;
+}
+
+@keyframes fade-slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 打字机效果 */
+.typing-effect {
+  overflow: hidden;
+  white-space: pre-wrap;
+  animation: typing 0.05s steps(1);
+  border-right: 2px solid transparent;
+}
+
+@keyframes typing {
+  from {
+    border-right-color: hsl(var(--primary));
+  }
+  to {
+    border-right-color: transparent;
+  }
+}

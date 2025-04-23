@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Timeline } from '@/components/Timeline';
@@ -15,7 +15,7 @@ import {
   SelectValue
 } from '@/components/ui/select';
 import type { TimelineData, TimelineEvent, DateFilterOption, DateFilterConfig } from '@/types';
-import { fetchTimelineData, fetchEventDetails, type ProgressCallback } from '@/lib/api';
+import { fetchTimelineData, fetchEventDetails, type ProgressCallback, type TimelineEventCallback, type SummaryCallback, type EventDetailsChunkCallback } from '@/lib/api';
 import { SearchProgress, type SearchProgressStep } from '@/components/SearchProgress';
 import { toast } from 'sonner';
 import { Settings, SortDesc, SortAsc, Download, Search, ChevronDown } from 'lucide-react';
@@ -39,11 +39,18 @@ function MainContent() {
   const [timelineVisible, setTimelineVisible] = useState(false);
   const searchRef = useRef<HTMLFormElement>(null);
   const timelineRef = useRef<HTMLDivElement>(null);
+  const timelineComponentRef = useRef<any>(null);
 
   // 新增进度状态
   const [searchProgressVisible, setSearchProgressVisible] = useState(false);
   const [searchProgressSteps, setSearchProgressSteps] = useState<SearchProgressStep[]>([]);
   const [searchProgressActive, setSearchProgressActive] = useState(false);
+
+  // 新增流式输出相关状态
+  const [streamingEvents, setStreamingEvents] = useState<TimelineEvent[]>([]);
+  const [streamingSummary, setStreamingSummary] = useState<string>('');
+  const [isStreamingDetails, setIsStreamingDetails] = useState(false);
+  const [currentStreamingContent, setCurrentStreamingContent] = useState('');
 
   // 进度回调函数
   const progressCallback: ProgressCallback = (message, status) => {
@@ -63,6 +70,41 @@ function MainContent() {
       setSearchProgressActive(true);
     }
   };
+
+  // 新增：事件流式接收回调
+  const eventReceivedCallback: TimelineEventCallback = useCallback((event) => {
+    // 添加新事件到流式事件列表
+    setStreamingEvents(prev => {
+      // 检查事件是否已存在（避免重复）
+      const exists = prev.some(e => e.id === event.id || (e.title === event.title && e.date === event.date));
+      if (exists) return prev;
+
+      // 添加新事件
+      const newEvents = [...prev, event];
+
+      // 按日期排序
+      return sortEvents(newEvents);
+    });
+  }, []);
+
+  // 新增：总结流式接收回调
+  const summaryReceivedCallback: SummaryCallback = useCallback((summary) => {
+    setStreamingSummary(summary);
+  }, []);
+
+  // 新增：事件详情流式接收回调
+  const detailsChunkCallback: EventDetailsChunkCallback = useCallback((chunk) => {
+    setCurrentStreamingContent(prev => {
+      const newContent = prev + chunk;
+
+      // 更新Timeline组件中的详情内容
+      if (timelineComponentRef.current) {
+        timelineComponentRef.current.updateDetailsContent(newContent);
+      }
+
+      return newContent;
+    });
+  }, []);
 
   // 新增处理滚动的函数
   const scrollToTimeline = () => {
@@ -93,9 +135,29 @@ function MainContent() {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
+  // 当流式事件更新时，更新过滤后的事件列表
+  useEffect(() => {
+    if (streamingEvents.length > 0) {
+      // 过滤并更新显示的事件
+      filterAndSortEvents(streamingEvents);
+    }
+  }, [streamingEvents, dateFilter, sortDirection]);
+
   // Effect to filter events based on date filter
   useEffect(() => {
-    if (timelineData.events.length === 0) {
+    if (timelineData.events.length === 0 && streamingEvents.length === 0) {
+      setFilteredEvents([]);
+      return;
+    }
+
+    // 使用传统方式获取的事件或流式事件
+    const events = timelineData.events.length > 0 ? timelineData.events : streamingEvents;
+    filterAndSortEvents(events);
+  }, [timelineData.events, dateFilter, sortDirection]);
+
+  // 过滤并排序事件
+  const filterAndSortEvents = (events: TimelineEvent[]) => {
+    if (events.length === 0) {
       setFilteredEvents([]);
       return;
     }
@@ -121,14 +183,14 @@ function MainContent() {
         break;
       default:
         // 'all' option - no filtering
-        setFilteredEvents(sortEvents(timelineData.events));
+        setFilteredEvents(sortEvents(events));
         return;
     }
 
     const endDate = dateFilter.option === 'custom' ? dateFilter.endDate : undefined;
 
     // Filter events based on date
-    const filtered = timelineData.events.filter(event => {
+    const filtered = events.filter(event => {
       // Parse the event date with various formats
       const dateParts = event.date.split('-').map(Number);
       let eventDate: Date;
@@ -160,7 +222,7 @@ function MainContent() {
 
     // Sort the filtered events based on current sort direction
     setFilteredEvents(sortEvents(filtered));
-  }, [timelineData.events, dateFilter, sortDirection]);
+  };
 
   // Function to sort events based on sort direction
   const sortEvents = (events: TimelineEvent[]): TimelineEvent[] => {
@@ -200,10 +262,13 @@ function MainContent() {
       return;
     }
 
-    // 重置进度显示
+    // 重置状态
+    setStreamingEvents([]);
+    setStreamingSummary('');
     setSearchProgressSteps([]);
     setSearchProgressActive(true);
     setSearchProgressVisible(true);
+    setError('');
 
     // 如果搜索框在中央，则先将其移动到顶部
     if (searchPosition === 'center') {
@@ -222,7 +287,8 @@ function MainContent() {
   const fetchData = async () => {
     setIsLoading(true);
     setError('');
-    setTimelineVisible(false);
+    setTimelineData({ events: [] }); // 清空传统数据
+    setTimelineVisible(true); // 立即显示时间轴容器，方便流式渲染
 
     try {
       // Add date range to query if filter is set
@@ -258,28 +324,34 @@ function MainContent() {
         queryWithDateFilter += dateRangeText;
       }
 
-      const data = await fetchTimelineData(queryWithDateFilter, apiConfig, progressCallback);
-      setTimelineData(data);
+      // 使用流式回调获取数据
+      const data = await fetchTimelineData(
+        queryWithDateFilter,
+        apiConfig,
+        progressCallback,
+        eventReceivedCallback,
+        summaryReceivedCallback
+      );
 
-      // 显示时间轴，添加动画延迟
+      // 如果没有通过流式获取到事件，则使用传统方式获取的事件
+      if (streamingEvents.length === 0) {
+        setTimelineData(data);
+      }
+
+      // 滚动到时间轴
+      if (data.events.length > 0 || streamingEvents.length > 0) {
+        setTimeout(scrollToTimeline, 300);
+      }
+
+      // 标记进度显示为非活动状态，但仍然保持可见，让用户可以查看进度历史
+      setSearchProgressActive(false);
+
+      // 3秒后自动隐藏进度显示
       setTimeout(() => {
-        setTimelineVisible(true);
-        // 滚动到时间轴
-        if (data.events.length > 0) {
-          setTimeout(scrollToTimeline, 300);
-        }
+        setSearchProgressVisible(false);
+      }, 3000);
 
-        // 标记进度显示为非活动状态，但仍然保持可见，让用户可以查看进度历史
-        setSearchProgressActive(false);
-
-        // 3秒后自动隐藏进度显示
-        setTimeout(() => {
-          setSearchProgressVisible(false);
-        }, 3000);
-
-      }, 300);
-
-      if (data.events.length === 0) {
+      if (data.events.length === 0 && streamingEvents.length === 0) {
         toast.warning('未找到相关事件，请尝试其他关键词');
       }
     } catch (err: unknown) {
@@ -354,21 +426,33 @@ function MainContent() {
     setSearchProgressActive(true);
     setSearchProgressVisible(true);
 
+    // 设置流式输出状态
+    setIsStreamingDetails(true);
+    setCurrentStreamingContent('');
+
     try {
       // 构建更具体的查询，包含事件日期和标题，添加更详细的分析指导
       const detailedQuery = `事件：${event.title}（${event.date}）\n\n请提供该事件的详细分析，包括事件背景、主要过程、关键人物、影响与意义。请尽可能提供多方观点，并分析该事件在${query}整体发展中的位置与作用。`;
 
+      // 使用流式回调获取详情
       const detailsContent = await fetchEventDetails(
         event.id,
         detailedQuery,
         apiConfig,
-        progressCallback
+        progressCallback,
+        detailsChunkCallback
       );
+
+      // 设置最终完整的内容
+      if (timelineComponentRef.current) {
+        timelineComponentRef.current.completeStreamingDetails();
+      }
 
       // 3秒后自动隐藏进度显示
       setTimeout(() => {
         setSearchProgressVisible(false);
         setSearchProgressActive(false);
+        setIsStreamingDetails(false);
       }, 3000);
 
       return detailsContent;
@@ -378,6 +462,7 @@ function MainContent() {
       console.error('Error fetching event details:', err);
 
       setSearchProgressActive(false);
+      setIsStreamingDetails(false);
 
       return '获取详细信息失败，请稍后再试';
     }
@@ -594,10 +679,12 @@ function MainContent() {
             )}
 
             <Timeline
+              ref={timelineComponentRef}
               events={filteredEvents}
               isLoading={isLoading}
               onRequestDetails={handleRequestDetails}
-              summary={timelineData.summary}
+              summary={streamingSummary || timelineData.summary}
+              streamingDetails={isStreamingDetails}
             />
           </div>
         )}

@@ -1,5 +1,12 @@
 import axios from 'axios';
-import { type ApiConfig, type TimelineData, TimelineEvent, type Person, type SearxngResult, type SearxngSearchItem } from '@/types';
+import {
+  type ApiConfig,
+  type TimelineData,
+  TimelineEvent,
+  type Person,
+  type SearxngResult,
+  type SearxngSearchItem
+} from '@/types';
 import { enhancedSearch } from './searchEnhancer';
 
 // 设置API请求的总超时时间，避免超出Netlify限制
@@ -118,6 +125,11 @@ interface StreamHandlers {
   onError?: StreamErrorHandler;
   onComplete?: StreamCompleteHandler;
 }
+
+// 定义事件订阅和处理的类型
+export type TimelineEventCallback = (event: TimelineEvent) => void;
+export type SummaryCallback = (summary: string) => void;
+export type EventDetailsChunkCallback = (chunk: string) => void;
 
 // 解析流式响应块的辅助函数
 function processStreamChunk(chunk: string): any {
@@ -365,9 +377,138 @@ function parseTimelineText(text: string): TimelineData {
   }
 }
 
+// 解析部分流式内容，实时提取已生成的事件和总结
+function parsePartialTimelineText(text: string): { events: TimelineEvent[], summary: string | null } {
+  try {
+    const result: { events: TimelineEvent[], summary: string | null } = {
+      events: [],
+      summary: null
+    };
+
+    // 提取总结部分
+    const summaryMatch = text.match(/===总结===\s*([\s\S]*?)(?=\s*===事件列表===|$)/);
+    if (summaryMatch?.[1]) {
+      result.summary = summaryMatch[1].trim();
+    }
+
+    // 提取事件列表
+    const eventsText = text.includes('===事件列表===')
+      ? text.split('===事件列表===')[1]
+      : '';
+
+    if (eventsText.trim()) {
+      const eventBlocks = eventsText.split(/\s*--事件\d+--\s*/).filter(block => block.trim().length > 0);
+
+      // 处理每个事件块
+      result.events = eventBlocks.map((block, index) => {
+        // 提取日期
+        const dateMatch = block.match(/日期：\s*(.*?)(?=\s*标题：|$)/);
+        const date = dateMatch?.[1]?.trim() || "";
+
+        // 提取标题
+        const titleMatch = block.match(/标题：\s*(.*?)(?=\s*描述：|$)/);
+        const title = titleMatch?.[1]?.trim() || "";
+
+        // 提取描述
+        const descMatch = block.match(/描述：\s*([\s\S]*?)(?=\s*相关人物：|$)/);
+        const description = descMatch?.[1]?.trim() || "";
+
+        // 提取相关人物
+        const peopleMatch = block.match(/相关人物：\s*(.*?)(?=\s*来源：|$)/);
+        const peopleText = peopleMatch?.[1]?.trim() || "";
+        const people: Person[] = [];
+
+        if (peopleText) {
+          const personEntries = peopleText.split(';').map(p => p.trim()).filter(p => p.length > 0);
+
+          for (const personEntry of personEntries) {
+            // 格式：人物名(角色,#颜色)
+            const personMatch = personEntry.match(/(.*?)\((.*?),(.*?)\)/);
+            if (personMatch) {
+              people.push({
+                name: personMatch[1].trim(),
+                role: personMatch[2].trim(),
+                color: personMatch[3].trim()
+              });
+            } else {
+              // 防止格式不完整，至少提取人名
+              const simpleName = personEntry.split('(')[0].trim();
+              if (simpleName) {
+                // 使用随机颜色
+                const randomColor = `#${Math.floor(Math.random()*16777215).toString(16).padStart(6, '0')}`;
+                people.push({
+                  name: simpleName,
+                  role: "相关人物",
+                  color: randomColor
+                });
+              }
+            }
+          }
+        }
+
+        // 提取来源
+        const sourceMatch = block.match(/来源：\s*([\s\S]*?)(?=\s*--事件|$)/);
+        const sourceRaw = sourceMatch?.[1]?.trim() || "未指明来源";
+
+        // 提取URL和网站名称
+        let sourceUrl = "";
+        let sourceName = sourceRaw;
+
+        // 处理"网站名（URL）"或"网站名(URL)"等格式
+        const nameUrlMatch = sourceRaw.match(/^(.+?)[\(（]+(https?:\/\/[^\s\)）]+)[\)）]+/);
+        if (nameUrlMatch) {
+          sourceName = nameUrlMatch[1].trim();
+          const originalUrl = nameUrlMatch[2].trim(); // 保存原始URL
+          sourceUrl = originalUrl.replace(/[\)\]]$/, ''); // 清理URL
+        } else {
+          // 尝试直接提取URL
+          const urlMatch = sourceRaw.match(/(https?:\/\/[^\s\)）]+)/);
+          if (urlMatch) {
+            const originalUrl = urlMatch[1]; // 保存原始URL
+            sourceUrl = originalUrl.replace(/[\)\]]$/, ''); // 清理URL
+
+            // 如果URL前有内容，取URL前的内容为sourceName（去除尾部标点）
+            const beforeUrl = sourceRaw.split(originalUrl)[0].trim().replace(/[\s:：\-—]+$/, '');
+            if (beforeUrl) {
+              sourceName = beforeUrl;
+            } else {
+              // 如果整个来源就是URL，使用域名作为显示文本
+              try {
+                const url = new URL(sourceUrl);
+                sourceName = url.hostname.replace(/^www\./, '');
+              } catch (e) {
+                sourceName = "查看来源";
+              }
+            }
+          } else {
+            // 没有URL，全部作为名称
+            sourceName = sourceRaw;
+            sourceUrl = "";
+          }
+        }
+
+        // 创建事件对象
+        return {
+          id: `stream-event-${index}`, // 为流式事件添加特殊前缀
+          date,
+          title,
+          description,
+          people,
+          source: sourceName,
+          sourceUrl
+        };
+      });
+    }
+
+    return result;
+  } catch (error) {
+    console.error("解析部分文本响应失败:", error);
+    return { events: [], summary: null };
+  }
+}
+
 // 获取API地址，优先使用相对路径调用中间层
 function getApiUrl(apiConfig: ApiConfig, endpoint = 'chat'): string {
-  // 根据不同的端点返回不同的 API 路径
   return `/api/${endpoint}`;
 }
 
@@ -541,11 +682,13 @@ function formatSearchResultsForAI(results: SearxngResult | null): string {
   return formattedText;
 }
 
-// 更新: fetchTimelineData函数，添加流式处理支持
+// 更新: fetchTimelineData函数，添加增强的流式处理支持
 export async function fetchTimelineData(
   query: string,
   apiConfig: ApiConfig,
-  progressCallback?: ProgressCallback
+  progressCallback?: ProgressCallback,
+  onEventReceived?: TimelineEventCallback, // 新增事件回调
+  onSummaryReceived?: SummaryCallback     // 新增总结回调
 ): Promise<TimelineData> {
   try {
     const { model, endpoint, apiKey } = apiConfig;
@@ -606,6 +749,9 @@ export async function fetchTimelineData(
     let responseContent = '';
     let isCompleted = false;
     let streamError: Error | null = null;
+    let partialData: TimelineData = { events: [] };
+    let previousEventsCount = 0;
+    let processedEvents = new Set<string>();
 
     // 创建Promise来处理流式响应
     await new Promise<void>((resolve, reject) => {
@@ -626,6 +772,33 @@ export async function fetchTimelineData(
             if (chunk.choices && chunk.choices[0] && chunk.choices[0].delta && chunk.choices[0].delta.content) {
               const content = chunk.choices[0].delta.content;
               responseContent += content;
+
+              // 解析当前累积的内容，尝试提取事件和总结
+              const { events, summary } = parsePartialTimelineText(responseContent);
+
+              // 如果有总结且回调函数存在，则调用回调
+              if (summary && onSummaryReceived && (!partialData.summary || partialData.summary !== summary)) {
+                partialData.summary = summary;
+                onSummaryReceived(summary);
+              }
+
+              // 处理新事件
+              if (events.length > previousEventsCount && onEventReceived) {
+                // 找出新增的事件
+                for (const event of events) {
+                  // 使用事件标题和日期作为唯一标识
+                  const eventKey = `${event.title}-${event.date}`;
+
+                  // 如果是新事件且回调函数存在，调用回调
+                  if (!processedEvents.has(eventKey)) {
+                    processedEvents.add(eventKey);
+                    onEventReceived(event);
+                  }
+                }
+
+                previousEventsCount = events.length;
+                partialData.events = events;
+              }
 
               // 定期更新进度
               if (progressCallback && content.length > 10) {
@@ -710,12 +883,13 @@ export async function fetchTimelineData(
   }
 }
 
-// 更新: fetchEventDetails函数，添加流式处理支持
+// 更新: fetchEventDetails函数，添加增强的流式处理支持
 export async function fetchEventDetails(
   eventId: string,
   query: string,
   apiConfig: ApiConfig,
-  progressCallback?: ProgressCallback
+  progressCallback?: ProgressCallback,
+  onChunkReceived?: EventDetailsChunkCallback // 新增块接收回调
 ): Promise<string> {
   try {
     const { model, endpoint, apiKey } = apiConfig;
@@ -776,6 +950,7 @@ export async function fetchEventDetails(
 
     // 使用流式响应
     let responseContent = '';
+    let previousContentLength = 0;
     let isCompleted = false;
     let streamError: Error | null = null;
 
@@ -799,9 +974,15 @@ export async function fetchEventDetails(
               const content = chunk.choices[0].delta.content;
               responseContent += content;
 
+              // 如果设置了流式回调，调用回调提供新内容
+              if (onChunkReceived && content) {
+                onChunkReceived(content);
+              }
+
               // 定期更新进度
-              if (progressCallback && content.length > 10) {
+              if (progressCallback && responseContent.length - previousContentLength > 50) {
                 progressCallback('AI助手正在分析事件详情...', 'pending');
+                previousContentLength = responseContent.length;
               }
             } else if (chunk.error) {
               // 处理错误信息
@@ -859,6 +1040,11 @@ export async function fetchEventDetails(
 
       // 提取AI响应内容
       responseContent = response.data.choices[0].message.content;
+
+      // 如果设置了流式回调，为非流式响应调用一次完整回调
+      if (onChunkReceived && responseContent) {
+        onChunkReceived(responseContent);
+      }
     }
 
     if (progressCallback) {
