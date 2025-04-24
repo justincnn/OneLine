@@ -9,66 +9,27 @@ on:
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 60
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
       
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-        with:
-          platforms: arm64,arm
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
       
       - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-          
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-        with:
-          driver-opts: |
-            image=moby/buildkit:v0.12.0
-            network=host
       
-      - name: Cache Docker layers
-        uses: actions/cache@v3
-        with:
-          path: /tmp/.buildx-cache
-          key: ${{ runner.os }}-buildx-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-buildx-
-        
-      - name: Build and push amd64 image first
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          platforms: linux/amd64
-          push: false
-          tags: justincnn/oneline:latest-amd64
-          build-args: |
-            NODE_OPTIONS=--max-old-space-size=4096
-          cache-from: type=local,src=/tmp/.buildx-cache
-          cache-to: type=local,dest=/tmp/.buildx-cache-new,mode=max
-          outputs: type=docker
-        
-      - name: Build and push arm64 image
+      # 无需多架构构建，直接构建amd64版本并推送
+      - name: Build and push
         uses: docker/build-push-action@v5
         with:
           context: .
           push: ${{ github.event_name != 'pull_request' }}
-          platforms: linux/arm64/v8
+          platforms: linux/amd64
           tags: justincnn/oneline:latest,justincnn/oneline:${{ github.sha }}
-          build-args: |
-            NODE_OPTIONS=--max-old-space-size=4096
-            NPM_CONFIG_LOGLEVEL=verbose
-          cache-from: type=local,src=/tmp/.buildx-cache
-          cache-to: type=local,dest=/tmp/.buildx-cache-new,mode=max
-          outputs: type=image,push=true
-          provenance: false
-          
-      - name: Move cache
-        run: |
-          rm -rf /tmp/.buildx-cache
-          mv /tmp/.buildx-cache-new /tmp/.buildx-cache
+          cache-from: type=registry,ref=justincnn/oneline:latest
+          cache-to: type=inline
