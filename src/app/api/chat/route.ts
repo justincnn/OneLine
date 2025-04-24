@@ -80,71 +80,84 @@ export async function POST(request: Request) {
       const encoder = new TextEncoder();
       const readableStream = new ReadableStream({
         async start(controller) {
-          // 流式请求重试逻辑
           let lastError;
           for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
             try {
-              // 发送流式请求
-              const response = await axios.post(finalEndpoint, payload, {
+              // 使用fetch API直接处理流式响应，避免axios中间层
+              const response = await fetch(finalEndpoint, {
+                method: 'POST',
                 headers,
-                timeout: TIMEOUT_MS,
-                responseType: 'stream'
+                body: JSON.stringify(payload)
               });
 
-              // 设置响应处理
-              if (response.data) {
-                response.data.on('data', (chunk: Buffer) => {
-                  try {
-                    const textChunk = chunk.toString('utf-8');
-
-                    // 如果是JSON格式的数据块，解析它们
-                    if (textChunk.trim().startsWith('{')) {
-                      textChunk.split('\n').forEach(line => {
-                        if (line.trim() && line.trim() !== 'data: [DONE]') {
-                          try {
-                            // 移除SSE前缀 (如果有)
-                            const jsonData = line.replace(/^data: /, '').trim();
-                            if (jsonData) {
-                              controller.enqueue(encoder.encode(jsonData + '\n'));
-                            }
-                          } catch (e) {
-                            console.error('无法解析JSON块:', line, e);
-                            controller.enqueue(encoder.encode(line + '\n'));
-                          }
-                        }
-                      });
-                    } else {
-                      // 对于非JSON格式的块，直接传递
-                      controller.enqueue(encoder.encode(textChunk));
-                    }
-                  } catch (chunkError) {
-                    console.error('处理数据块时出错:', chunkError);
-                    controller.enqueue(encoder.encode(JSON.stringify({ error: 'Error processing chunk' }) + '\n'));
-                  }
-                });
-
-                response.data.on('end', () => {
-                  controller.close();
-                });
-
-                response.data.on('error', (error: Error) => {
-                  console.error('流响应错误:', error);
-                  controller.error(error);
-                });
-
-                // 成功建立流式连接，跳出重试循环
-                return;
+              if (!response.ok) {
+                throw new Error(`API returned ${response.status}: ${await response.text()}`);
               }
+
+              const reader = response.body?.getReader();
+              if (!reader) {
+                throw new Error('无法获取响应流');
+              }
+
+              // 处理流式数据
+              const decoder = new TextDecoder('utf-8');
+              let buffer = '';
+
+              while (true) {
+                const { done, value } = await reader.read();
+
+                if (done) {
+                  // 处理缓冲区中可能的最后数据
+                  if (buffer.trim()) {
+                    const lines = buffer.split('\n');
+                    for (const line of lines) {
+                      if (line.trim() && !line.includes('data: [DONE]')) {
+                        const jsonLine = line.replace(/^data: /, '').trim();
+                        if (jsonLine) {
+                          controller.enqueue(encoder.encode(jsonLine + '\n'));
+                        }
+                      }
+                    }
+                  }
+                  break;
+                }
+
+                // 解码新数据并添加到缓冲区
+                const chunk = decoder.decode(value, { stream: true });
+                buffer += chunk;
+
+                // 处理完整的行
+                const lines = buffer.split('\n');
+                // 保留最后一行，它可能不完整
+                buffer = lines.pop() || '';
+
+                // 处理所有完整的行
+                for (const line of lines) {
+                  if (line.trim() && !line.includes('data: [DONE]')) {
+                    try {
+                      // 移除SSE前缀 (如果有)
+                      const jsonLine = line.replace(/^data: /, '').trim();
+                      if (jsonLine) {
+                        controller.enqueue(encoder.encode(jsonLine + '\n'));
+                      }
+                    } catch (e) {
+                      console.error('处理行数据失败:', e);
+                    }
+                  }
+                }
+              }
+
+              // 成功完成，跳出重试循环
+              controller.close();
+              return;
             } catch (error: any) {
               console.error(`流式API请求失败 (attempt ${attempt + 1}/${MAX_RETRIES}):`, error.message);
               lastError = error;
 
-              // 如果已经是最后一次尝试，准备发送错误响应
               if (attempt === MAX_RETRIES - 1) {
                 break;
               }
 
-              // 使用指数退避等待一段时间后重试
               const delay = RETRY_DELAYS[attempt] || 5000;
               await new Promise(resolve => setTimeout(resolve, delay));
             }
@@ -159,13 +172,12 @@ export async function POST(request: Request) {
               statusText: lastError?.response?.statusText,
               isTimeout: lastError?.code === 'ECONNABORTED'
             };
-            controller.enqueue(encoder.encode(JSON.stringify(errorDetails)));
+            controller.enqueue(encoder.encode(JSON.stringify(errorDetails) + '\n'));
             controller.close();
           }
         }
       });
 
-      // 返回流式响应
       return new Response(readableStream, {
         headers: {
           'Content-Type': 'text/event-stream',
@@ -190,38 +202,31 @@ export async function POST(request: Request) {
           console.error(`API请求失败 (attempt ${attempt + 1}/${MAX_RETRIES}):`, error.message);
           lastError = error;
 
-          // 如果已经是最后一次尝试，则不再重试
           if (attempt === MAX_RETRIES - 1) {
             break;
           }
 
-          // 使用指数退避等待一段时间后重试
           const delay = RETRY_DELAYS[attempt] || 5000;
           await new Promise(resolve => setTimeout(resolve, delay));
         }
       }
 
-      // 所有重试均失败，返回错误响应
       console.error('所有API请求尝试均失败:', lastError);
 
-      // 构建更详细的错误信息
       const errorDetails = {
         error: 'API request failed after multiple attempts',
         message: lastError?.message,
       };
 
-      // 如果有响应数据，添加到错误中
       if (lastError?.response) {
         errorDetails.status = lastError.response.status;
         errorDetails.statusText = lastError.response.statusText;
         errorDetails.data = lastError.response.data;
       } else if (lastError?.request) {
-        // 请求已发出但没有收到响应
         errorDetails.request = 'Request was made but no response was received';
         errorDetails.timeout = lastError.code === 'ECONNABORTED';
       }
 
-      // 返回错误响应
       return NextResponse.json(
         errorDetails,
         { status: lastError?.response?.status || 500 }
@@ -230,24 +235,20 @@ export async function POST(request: Request) {
   } catch (error: any) {
     console.error('API route error:', error);
 
-    // 构建更详细的错误信息
     const errorDetails = {
       error: 'API request failed',
       message: error.message,
     };
 
-    // 如果有响应数据，添加到错误中
     if (error.response) {
       errorDetails.status = error.response.status;
       errorDetails.statusText = error.response.statusText;
       errorDetails.data = error.response.data;
     } else if (error.request) {
-      // 请求已发出但没有收到响应
       errorDetails.request = 'Request was made but no response was received';
       errorDetails.timeout = error.code === 'ECONNABORTED';
     }
 
-    // 返回错误响应
     return NextResponse.json(
       errorDetails,
       { status: error.response?.status || 500 }
