@@ -5,6 +5,7 @@ export interface ApiConfig {
   allowUserConfig?: boolean; // 是否允许用户在前端配置API设置
   accessPassword?: string; // 访问密码
   searxng?: SearxngConfig; // 添加SearXNG支持
+  streamingOptions?: StreamingOptions; // 流式输出设置
 }
 
 export interface TimelineEvent {
@@ -93,4 +94,20 @@ export interface SearxngSearchItem {
   parsed_url?: string[]; // 添加这个字段以匹配实际响应
   priority?: string; // 添加这个字段以匹配实际响应
   fromQuery?: string; // 添加这个字段用于标识结果来自哪个查询
+}
+
+// 流式输出配置
+export interface StreamingOptions {
+  enabled: boolean; // 是否启用流式输出
+  typingSpeed?: number; // 打字机效果速度（毫秒/字符）
+  showCursor?: boolean; // 是否显示光标
+  scrollToBottom?: boolean; // 是否自动滚动到底部
+}
+
+// 流式输出状态类型
+export interface StreamingState {
+  isStreaming: boolean; // 是否正在流式输出
+  progress: number; // 流式输出进度（0-100）
+  startTime?: Date; // 开始时间
+  endTime?: Date; // 结束时间
 }

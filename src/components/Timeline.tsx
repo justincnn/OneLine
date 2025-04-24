@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Avatar } from '@/components/ui/avatar';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { StreamingText } from './StreamingText'; // 新增导入
 
 interface TimelineProps {
   events: TimelineEvent[];
@@ -116,6 +117,7 @@ export const Timeline = forwardRef<TimelineHandle, TimelineProps>(
       );
     };
 
+    // 更新Markdown渲染函数，保留现有格式化逻辑，但不用于流式输出组件
     const renderMarkdown = (content: string) => {
       const formatMarkdownText = (text: string) => {
         const boldRegex = /\*\*(.*?)\*\*/g;
@@ -332,17 +334,26 @@ export const Timeline = forwardRef<TimelineHandle, TimelineProps>(
               </DialogDescription>
             </DialogHeader>
             <div className="mt-2 sm:mt-4 max-h-[60vh] overflow-y-auto">
-              {!isLoadingDetails && detailsContent ? (
+              {!isLoadingDetails && detailsContent && !streamingDetails ? (
+                // 非流式模式下使用传统渲染
                 renderMarkdown(detailsContent)
               ) : (
                 <div className="space-y-2">
                   {detailsContent && streamingDetails ? (
-                    // 流式输出模式下渲染已接收的内容
-                    <div className="typing-effect">
-                      {renderMarkdown(detailsContent)}
-                    </div>
+                    // 流式输出模式下使用新的StreamingText组件
+                    <StreamingText
+                      content={detailsContent}
+                      isStreaming={isLoadingDetails}
+                      withTypingEffect={true}
+                      typingSpeed={15}
+                      scrollToBottom={true}
+                      className="text-sm space-y-2 px-1"
+                    />
+                  ) : detailsContent ? (
+                    // 有内容但非流式模式时的渲染
+                    renderMarkdown(detailsContent)
                   ) : (
-                    // 加载中或无内容时显示骨架屏
+                    // 无内容时显示骨架屏
                     <>
                       <Skeleton className="h-3 sm:h-4 w-full rounded-md" />
                       <Skeleton className="h-3 sm:h-4 w-full rounded-md" />
@@ -351,7 +362,7 @@ export const Timeline = forwardRef<TimelineHandle, TimelineProps>(
                     </>
                   )}
                   {isLoadingDetails && streamingDetails && (
-                    <div className="mt-2 flex justify-center">
+                    <div className="mt-4 flex justify-center">
                       <div className="loading-dots">
                         <span className="dot"></span>
                         <span className="dot"></span>

@@ -29,7 +29,9 @@ export function ApiSettings({ open, onOpenChange }: ApiSettingsProps) {
     setPasswordValidated,
     hasEnvConfig,
     useEnvConfig,
-    setUseEnvConfig
+    setUseEnvConfig,
+    streamingPreference,
+    setStreamingPreference
   } = useApi();
 
   const [endpoint, setEndpoint] = useState('');
@@ -222,6 +224,11 @@ export function ApiSettings({ open, onOpenChange }: ApiSettingsProps) {
     }
   };
 
+  // 处理流式输出偏好变更
+  const handleStreamingToggle = (enabled: boolean) => {
+    setStreamingPreference(enabled);
+  };
+
   // 更新保存函数以包含SearXNG配置
   const handleSave = () => {
     // 如果不允许用户配置，则直接关闭对话框
@@ -363,11 +370,12 @@ export function ApiSettings({ open, onOpenChange }: ApiSettingsProps) {
             </>
           ) : (
             <>
-              {/* 设置界面使用Tabs分开API设置和SearXNG设置 */}
+              {/* 设置界面使用Tabs分开不同设置 */}
               <Tabs value={activeTab} onValueChange={setActiveTab}>
                 <TabsList className="w-full">
                   <TabsTrigger value="api" className="flex-1">API设置</TabsTrigger>
                   <TabsTrigger value="searxng" className="flex-1">搜索设置</TabsTrigger>
+                  <TabsTrigger value="ui" className="flex-1">界面设置</TabsTrigger>
                 </TabsList>
 
                 {/* API设置标签页 */}
@@ -623,6 +631,47 @@ export function ApiSettings({ open, onOpenChange }: ApiSettingsProps) {
                         启用SearXNG搜索可以让AI获取最新的信息，提供更准确的回答。
                       </div>
                     )}
+                  </div>
+                </TabsContent>
+
+                {/* 新增: UI界面设置标签页 */}
+                <TabsContent value="ui" className="mt-4">
+                  <div className="space-y-4">
+                    {/* 流式输出设置 */}
+                    <div className="flex items-center justify-between p-3 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800/50">
+                      <div className="flex flex-col">
+                        <label htmlFor="enable-streaming" className="font-medium text-blue-800 dark:text-blue-200">
+                          流式输出
+                        </label>
+                        <span className="text-sm text-blue-600 dark:text-blue-300">
+                          启用实时渲染流式输出，提供更流畅的打字机效果
+                        </span>
+                      </div>
+                      <Switch
+                        id="enable-streaming"
+                        checked={streamingPreference}
+                        onCheckedChange={handleStreamingToggle}
+                      />
+                    </div>
+
+                    {/* 流式输出说明 */}
+                    <div className={`text-sm p-3 rounded-lg border ${
+                      streamingPreference ?
+                      'bg-green-50 dark:bg-green-900/20 text-green-800 dark:text-green-200 border-green-200 dark:border-green-800/50' :
+                      'bg-yellow-50 dark:bg-yellow-900/20 text-yellow-800 dark:text-yellow-200 border-yellow-200 dark:border-yellow-800/50'
+                    }`}>
+                      {streamingPreference ? (
+                        <>
+                          <p className="font-medium">流式输出已启用</p>
+                          <p className="mt-1">AI生成内容时将实时显示，提供更好的视觉体验。特别是在生成长文本内容（如事件分析）时，能够立即看到结果。</p>
+                        </>
+                      ) : (
+                        <>
+                          <p className="font-medium">流式输出已禁用</p>
+                          <p className="mt-1">AI生成的内容将在完全准备好后一次性显示。如果您的网络连接不稳定或设备性能较低，禁用此功能可能更适合。</p>
+                        </>
+                      )}
+                    </div>
                   </div>
                 </TabsContent>
               </Tabs>

@@ -119,9 +119,10 @@
   50% { transform: translateX(5px); }
 }
 
+/* 覆盖 blink 动画用于流式输出 */
 @keyframes blink {
-  0%, 100% { opacity: 0.2; }
-  50% { opacity: 0.8; }
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
 }
 
 .animate-fade-in {
@@ -146,6 +147,10 @@
 
 .animate-float-right {
   animation: floatRight 8s ease-in-out infinite;
+}
+
+.animate-blink {
+  animation: blink 1s infinite;
 }
 
 /* 输入框动画 */
@@ -249,38 +254,95 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 4px;
 }
 
 .loading-dots .dot {
-  width: 8px;
-  height: 8px;
-  margin: 0 4px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
-  background-color: hsl(var(--primary));
-  animation: dot-pulse 1.5s infinite ease-in-out;
+  background-color: currentColor;
+  opacity: 0.6;
+}
+
+.loading-dots .dot:nth-child(1) {
+  animation: dotPulse 1.4s infinite 0.2s;
 }
 
 .loading-dots .dot:nth-child(2) {
-  animation-delay: 0.2s;
+  animation: dotPulse 1.4s infinite 0.4s;
 }
 
 .loading-dots .dot:nth-child(3) {
-  animation-delay: 0.4s;
+  animation: dotPulse 1.4s infinite 0.6s;
 }
 
-@keyframes dot-pulse {
-  0%, 100% {
-    transform: scale(0.8);
-    opacity: 0.5;
-  }
-  50% {
-    transform: scale(1.2);
-    opacity: 1;
-  }
+@keyframes dotPulse {
+  0%, 60%, 100% { transform: scale(1); opacity: 0.6; }
+  30% { transform: scale(1.5); opacity: 1; }
 }
 
-/* 流式事件卡片的动画 */
+/* 流式输出相关的动画效果 */
+.streaming-text-container {
+  line-height: 1.6;
+  word-break: break-word;
+}
+
+.streaming-text-container a {
+  color: theme('colors.blue.500');
+  text-decoration: underline;
+}
+
+.streaming-text-container code {
+  background-color: theme('colors.gray.100');
+  color: theme('colors.rose.500');
+  padding: 0.1rem 0.2rem;
+  border-radius: 0.2rem;
+  font-family: monospace;
+}
+
+.dark .streaming-text-container code {
+  background-color: theme('colors.gray.800');
+  color: theme('colors.rose.400');
+}
+
+/* 更平滑的打字机效果 */
+.typing-effect {
+  overflow: hidden;
+}
+
+/* 添加行高亮效果 */
+.streaming-text-container p:nth-child(odd) {
+  background-color: rgba(0, 0, 0, 0.02);
+}
+
+.dark .streaming-text-container p:nth-child(odd) {
+  background-color: rgba(255, 255, 255, 0.02);
+}
+
+/* 添加分段动画效果 */
+.stream-paragraph-appear {
+  animation: fadeIn 0.3s ease forwards;
+}
+
+/* 修改事件卡片进入动画 */
 .timeline-card-streaming {
+  animation: streamCardEnter 0.5s ease forwards;
+}
+
+@keyframes streamCardEnter {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 流式事件卡片的旧动画（兼容） */
+.timeline-card-streaming-old {
   animation: fade-slide-up 0.5s ease-out forwards;
 }
 
@@ -296,13 +358,6 @@
 }
 
 /* 打字机效果 */
-.typing-effect {
-  overflow: hidden;
-  white-space: pre-wrap;
-  animation: typing 0.05s steps(1);
-  border-right: 2px solid transparent;
-}
-
 @keyframes typing {
   from {
     border-right-color: hsl(var(--primary));
@@ -310,4 +365,10 @@
   to {
     border-right-color: transparent;
   }
+}
+
+.typing-effect {
+  white-space: pre-wrap;
+  animation: typing 0.05s steps(1);
+  border-right: 2px solid transparent;
 }

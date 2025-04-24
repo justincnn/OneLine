@@ -378,7 +378,7 @@ function parseTimelineText(text: string): TimelineData {
 }
 
 // 解析部分流式内容，实时提取已生成的事件和总结
-function parsePartialTimelineText(text: string): { events: TimelineEvent[], summary: string | null } {
+export function parsePartialTimelineText(text: string): { events: TimelineEvent[], summary: string | null } {
   try {
     const result: { events: TimelineEvent[], summary: string | null } = {
       events: [],
