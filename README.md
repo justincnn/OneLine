@@ -152,37 +152,64 @@ docker run -p 1212:3000 -d oneline:latest
 - 启用SearXNG
 - 可选择搜索引擎、语言、时间范围等
 
-### 环境变量配置
+### Docker环境变量配置
 
-除了前端配置外，你还可以通过环境变量来配置API设置。这对于部署环境特别有用，可以避免将敏感信息暴露给用户。
+在Docker环境中，您可以通过环境变量进行配置。我们提供了两种方式来设置环境变量：
 
-1. 复制项目根目录下的`.env.example`文件为`.env.local`，或者在Docker环境中通过环境变量提供配置
-2. 配置以下环境变量：
+#### 方式1：通过docker-compose.yml文件（推荐）
 
+编辑docker-compose.yml文件，取消注释（删除#）并设置相应的环境变量：
+
+```yaml
+environment:
+  - NODE_ENV=production
+  # 方式1：使用外部API服务
+  - NEXT_PUBLIC_API_ENDPOINT=https://api.example.com/v1/chat/completions
+  - NEXT_PUBLIC_API_MODEL=gemini-2.0-pro-exp-search
+  - NEXT_PUBLIC_API_KEY=your_api_key_here
+  # 方式2：使用SearXNG搜索增强（推荐）
+  - NEXT_PUBLIC_SEARXNG_URL=https://sousuo.emoe.top
+  - NEXT_PUBLIC_SEARXNG_ENABLED=true
+  # 安全设置
+  - NEXT_PUBLIC_ALLOW_USER_CONFIG=true
+  - NEXT_PUBLIC_ACCESS_PASSWORD=your_access_password
 ```
-# 外部API配置（如OpenAI、Google Gemini等）
-NEXT_PUBLIC_API_ENDPOINT=https://api.example.com/v1/chat/completions
-NEXT_PUBLIC_API_MODEL=gemini-2.0-pro-exp-search
-NEXT_PUBLIC_API_KEY=your_api_key_here
 
-# SearXNG搜索增强配置（推荐）
-NEXT_PUBLIC_SEARXNG_URL=https://sousuo.emoe.top
-NEXT_PUBLIC_SEARXNG_ENABLED=true
+然后运行：
 
-# 是否允许用户在前端配置API设置
-# 设置为"false"将禁止用户在前端修改API设置
-# 设置为"true"或不设置将允许用户在前端修改API设置
-NEXT_PUBLIC_ALLOW_USER_CONFIG=true
-
-# 访问密码配置
-# 设置后，用户需要输入正确的密码才能访问API设置
-# 这可以避免API被滥用，增强应用安全性
-NEXT_PUBLIC_ACCESS_PASSWORD=your_access_password_here
+```bash
+docker-compose up -d
 ```
+
+#### 方式2：通过docker run命令
+
+```bash
+docker run -p 1212:3000 \
+  -e NEXT_PUBLIC_API_ENDPOINT=https://api.example.com/v1/chat/completions \
+  -e NEXT_PUBLIC_API_MODEL=gemini-2.0-pro-exp-search \
+  -e NEXT_PUBLIC_API_KEY=your_api_key_here \
+  -e NEXT_PUBLIC_SEARXNG_URL=https://sousuo.emoe.top \
+  -e NEXT_PUBLIC_SEARXNG_ENABLED=true \
+  -e NEXT_PUBLIC_ALLOW_USER_CONFIG=true \
+  -e NEXT_PUBLIC_ACCESS_PASSWORD=your_access_password \
+  -d justincnn/oneline:latest
+```
+
+### 环境变量说明
+
+| 环境变量 | 说明 | 默认值 |
+|---------|------|-------|
+| NEXT_PUBLIC_API_ENDPOINT | 外部API端点 | - |
+| NEXT_PUBLIC_API_MODEL | API模型名称 | gemini-2.0-flash-exp-search |
+| NEXT_PUBLIC_API_KEY | API密钥 | - |
+| NEXT_PUBLIC_SEARXNG_URL | SearXNG搜索服务URL | https://sousuo.emoe.top |
+| NEXT_PUBLIC_SEARXNG_ENABLED | 是否启用SearXNG | false |
+| NEXT_PUBLIC_ALLOW_USER_CONFIG | 是否允许用户在前端修改配置 | true |
+| NEXT_PUBLIC_ACCESS_PASSWORD | 访问密码 | - |
 
 **注意事项：**
 
 - 环境变量配置的优先级高于前端用户配置
 - 当`NEXT_PUBLIC_ALLOW_USER_CONFIG`设置为`false`时，用户将无法在前端修改API设置
 - 当设置了`NEXT_PUBLIC_ACCESS_PASSWORD`时，用户需要输入正确的密码才能访问API设置
-- 当未设置环境变量时，将使用前端用户配置的设置
+- 推荐使用SearXNG搜索增强功能，这样可以避免配置API密钥
