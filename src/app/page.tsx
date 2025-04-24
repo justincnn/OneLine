@@ -504,7 +504,7 @@ function MainContent() {
         className={searchPosition === 'center' ? 'search-container-center' : 'search-container-top'}
       >
         {searchPosition === 'center' && (
-          <div className="flex flex-col items-center mb-8 animate-slide-down">
+          <div className="flex flex-col items-center mb-8 animate-slideDown">
             <h1 className="text-4xl md:text-5xl font-bold mb-4 text-center page-title">一线</h1>
             <p className="text-lg md:text-xl text-muted-foreground mb-8 text-center max-w-xl mx-auto">
               AI驱动的热点事件时间轴 · 洞察历史脉络

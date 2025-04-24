@@ -7,17 +7,16 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Avatar } from '@/components/ui/avatar';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { StreamingText } from './StreamingText'; // 新增导入
+import { StreamingText } from './StreamingText';
 
 interface TimelineProps {
   events: TimelineEvent[];
   isLoading?: boolean;
   onRequestDetails: (event: TimelineEvent) => Promise<string>;
   summary?: string;
-  streamingDetails?: boolean; // 新增：标识是否正在流式输出详情
+  streamingDetails?: boolean;
 }
 
-// 定义可被父组件访问的方法
 export interface TimelineHandle {
   updateDetailsContent: (content: string) => void;
   completeStreamingDetails: () => void;
@@ -32,7 +31,6 @@ export const Timeline = forwardRef<TimelineHandle, TimelineProps>(
     const [isLoadingDetails, setIsLoadingDetails] = useState<boolean>(false);
     const detailsDialogRef = useRef<HTMLDivElement>(null);
 
-    // 暴露方法给父组件
     useImperativeHandle(ref, () => ({
       updateDetailsContent: (content: string) => {
         setDetailsContent(content);
@@ -42,7 +40,6 @@ export const Timeline = forwardRef<TimelineHandle, TimelineProps>(
       }
     }));
 
-    // 新增滚动到底部的效果，用于事件详情实时滚动
     useEffect(() => {
       if (detailsDialogRef.current && isLoadingDetails && streamingDetails) {
         const contentElement = detailsDialogRef.current.querySelector('.max-h-\\[60vh\\]');
@@ -72,14 +69,12 @@ export const Timeline = forwardRef<TimelineHandle, TimelineProps>(
 
       try {
         const details = await onRequestDetails(event);
-        // 如果不是流式输出，则直接设置内容
         if (!streamingDetails) {
           setDetailsContent(details);
         }
       } catch (error) {
         console.error('Failed to fetch details:', error);
       } finally {
-        // 只有在非流式输出模式下才在这里设置加载为false
         if (!streamingDetails) {
           setIsLoadingDetails(false);
         }
@@ -117,7 +112,6 @@ export const Timeline = forwardRef<TimelineHandle, TimelineProps>(
       );
     };
 
-    // 更新Markdown渲染函数，保留现有格式化逻辑，但不用于流式输出组件
     const renderMarkdown = (content: string) => {
       const formatMarkdownText = (text: string) => {
         const boldRegex = /\*\*(.*?)\*\*/g;
@@ -129,10 +123,8 @@ export const Timeline = forwardRef<TimelineHandle, TimelineProps>(
         const codeRegex = /`(.*?)`/g;
         formatted = formatted.replace(codeRegex, '<code>$1</code>');
 
-        // 添加对Markdown链接的处理，解决链接尾部带括号或方括号的问题
         const linkRegex = /\[(.*?)\]\((.*?)\)/g;
         formatted = formatted.replace(linkRegex, (match, text, url) => {
-          // 移除URL中可能的尾部括号和方括号
           const cleanUrl = url.replace(/[\)\]]$/, '');
           return `<a href="${cleanUrl}" target="_blank" rel="noopener noreferrer" class="text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 underline">${text}</a>`;
         });
@@ -250,7 +242,14 @@ export const Timeline = forwardRef<TimelineHandle, TimelineProps>(
               <CardTitle className="text-lg sm:text-xl">事件总结</CardTitle>
             </CardHeader>
             <CardContent className="p-4 sm:p-6 pt-0 sm:pt-0">
-              <p className="text-sm sm:text-base">{summary}</p>
+              <div className="text-sm sm:text-base">
+                <StreamingText
+                  content={summary}
+                  isStreaming={false}
+                  withTypingEffect={false}
+                  className="max-h-none overflow-visible"
+                />
+              </div>
             </CardContent>
           </Card>
         )}
@@ -258,11 +257,13 @@ export const Timeline = forwardRef<TimelineHandle, TimelineProps>(
         <div className="flex flex-col gap-4 sm:gap-6 py-4 sm:py-8">
           {events.map((event, index) => {
             const isExpanded = expandedEvents.has(event.id);
+            const isStreamEvent = event.id.startsWith('stream-');
+
             return (
               <div
                 key={event.id}
                 className={`flex gap-2 sm:gap-4 ${
-                  event.id.startsWith('stream-') ? 'timeline-card-streaming' : 'animate-slide-up'
+                  isStreamEvent ? 'timeline-card-streaming animate-streamCard' : 'animate-slideUp'
                 }`}
                 style={{ animationDelay: `${index * 0.1}s` }}
               >
@@ -276,7 +277,7 @@ export const Timeline = forwardRef<TimelineHandle, TimelineProps>(
                   )}
                 </div>
                 <div className="flex-1 pb-3 sm:pb-4">
-                  <Card className="event-card">
+                  <Card className={`event-card ${isStreamEvent ? 'border-l-[3px] border-l-primary/70' : ''}`}>
                     <CardHeader className="p-3 sm:p-6">
                       <CardTitle className="text-base sm:text-lg">{event.title}</CardTitle>
                       {event.source && (
@@ -296,9 +297,15 @@ export const Timeline = forwardRef<TimelineHandle, TimelineProps>(
                       {renderPeople(event.people)}
                     </CardHeader>
                     <CardContent className="p-3 sm:p-6 pt-0 sm:pt-0">
-                      <p className={`text-sm sm:text-base ${isExpanded ? '' : 'line-clamp-3'}`}>
-                        {event.description}
-                      </p>
+                      <div className={`text-sm sm:text-base ${isExpanded ? '' : 'line-clamp-3'}`}>
+                        <StreamingText
+                          content={event.description}
+                          isStreaming={false}
+                          withTypingEffect={false}
+                          scrollToBottom={false}
+                          className="max-h-none overflow-visible"
+                        />
+                      </div>
                     </CardContent>
                     <CardFooter className="p-3 sm:p-6 pt-0 sm:pt-0 flex justify-between">
                       <Button
@@ -335,12 +342,10 @@ export const Timeline = forwardRef<TimelineHandle, TimelineProps>(
             </DialogHeader>
             <div className="mt-2 sm:mt-4 max-h-[60vh] overflow-y-auto">
               {!isLoadingDetails && detailsContent && !streamingDetails ? (
-                // 非流式模式下使用传统渲染
                 renderMarkdown(detailsContent)
               ) : (
                 <div className="space-y-2">
                   {detailsContent && streamingDetails ? (
-                    // 流式输出模式下使用新的StreamingText组件
                     <StreamingText
                       content={detailsContent}
                       isStreaming={isLoadingDetails}
@@ -350,10 +355,8 @@ export const Timeline = forwardRef<TimelineHandle, TimelineProps>(
                       className="text-sm space-y-2 px-1"
                     />
                   ) : detailsContent ? (
-                    // 有内容但非流式模式时的渲染
                     renderMarkdown(detailsContent)
                   ) : (
-                    // 无内容时显示骨架屏
                     <>
                       <Skeleton className="h-3 sm:h-4 w-full rounded-md" />
                       <Skeleton className="h-3 sm:h-4 w-full rounded-md" />
