@@ -17,7 +17,6 @@ interface TimelineProps {
   streamingDetails?: boolean;
 }
 
-// 定义可被父组件访问的方法
 export interface TimelineHandle {
   updateDetailsContent: (content: string) => void;
   completeStreamingDetails: () => void;
@@ -34,7 +33,6 @@ export const Timeline = forwardRef<TimelineHandle, TimelineProps>(
     const detailsDialogRef = useRef<HTMLDivElement>(null);
     const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-    // 暴露方法给父组件
     useImperativeHandle(ref, () => ({
       updateDetailsContent: (content: string) => {
         setDetailsContent(content);
@@ -158,7 +156,7 @@ export const Timeline = forwardRef<TimelineHandle, TimelineProps>(
 
         const linkRegex = /\[(.*?)\]\((.*?)\)/g;
         formatted = formatted.replace(linkRegex, (match, text, url) => {
-          const cleanUrl = url.replace(/[\)\]]$/, '');
+          const cleanUrl = url.replace(/[\)\\]]$/, '');
           return `<a href="${cleanUrl}" target="_blank" rel="noopener noreferrer" class="text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 underline">${text}</a>`;
         });
 
@@ -236,6 +234,7 @@ export const Timeline = forwardRef<TimelineHandle, TimelineProps>(
       const isNewEvent = animateNewEvents.has(event.id);
       const isStreaming = isStreamingEvent(event);
 
+      // 为流式生成的新事件添加特殊的动画和样式
       const cardClasses = isStreaming
         ? `timeline-card-streaming ${isNewEvent ? 'timeline-card-new' : ''}`
         : 'animate-slide-up';
@@ -283,9 +282,15 @@ export const Timeline = forwardRef<TimelineHandle, TimelineProps>(
                 {renderPeople(event.people)}
               </CardHeader>
               <CardContent className="p-3 sm:p-6 pt-0 sm:pt-0">
-                <p className={`text-sm sm:text-base ${isExpanded ? '' : 'line-clamp-3'}`}>
-                  {event.description}
-                </p>
+                <div className={`text-sm sm:text-base ${isExpanded ? '' : 'line-clamp-3'}`}>
+                  <StreamingText
+                    content={event.description}
+                    isStreaming={false}
+                    withTypingEffect={false}
+                    scrollToBottom={false}
+                    className="max-h-none overflow-visible"
+                  />
+                </div>
               </CardContent>
               <CardFooter className="p-3 sm:p-6 pt-0 sm:pt-0 flex justify-between">
                 <Button
@@ -359,15 +364,14 @@ export const Timeline = forwardRef<TimelineHandle, TimelineProps>(
               <CardTitle className="text-lg sm:text-xl">事件总结</CardTitle>
             </CardHeader>
             <CardContent className="p-4 sm:p-6 pt-0 sm:pt-0">
-              {streamingDetails ? (
+              <div className="text-sm sm:text-base">
                 <StreamingText
                   content={summary}
                   isStreaming={false}
-                  className="text-sm sm:text-base"
+                  withTypingEffect={false}
+                  className="max-h-none overflow-visible"
                 />
-              ) : (
-                <p className="text-sm sm:text-base">{summary}</p>
-              )}
+              </div>
             </CardContent>
           </Card>
         )}
