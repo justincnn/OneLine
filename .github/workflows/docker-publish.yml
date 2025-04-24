@@ -9,8 +9,15 @@ on:
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
+    timeout-minutes: 120
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64,arm
       
       - name: Login to Docker Hub
         uses: docker/login-action@v3
@@ -33,7 +40,20 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-buildx-
         
-      - name: Build and push
+      - name: Build and push amd64 image first
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          platforms: linux/amd64
+          push: false
+          tags: justincnn/oneline:latest-amd64
+          build-args: |
+            NODE_OPTIONS=--max-old-space-size=4096
+          cache-from: type=local,src=/tmp/.buildx-cache
+          cache-to: type=local,dest=/tmp/.buildx-cache-new,mode=max
+          outputs: type=docker
+        
+      - name: Build and push arm64 image
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -42,6 +62,7 @@ jobs:
           tags: justincnn/oneline:latest,justincnn/oneline:${{ github.sha }}
           build-args: |
             NODE_OPTIONS=--max-old-space-size=4096
+            NPM_CONFIG_LOGLEVEL=verbose
           cache-from: type=local,src=/tmp/.buildx-cache
           cache-to: type=local,dest=/tmp/.buildx-cache-new,mode=max
           outputs: type=image,push=true

@@ -1,12 +1,19 @@
-FROM node:18-alpine AS base
+FROM node:16-alpine AS base
 
 # 安装依赖
 FROM base AS deps
 WORKDIR /app
 
+# 增加基本构建工具
+RUN apk add --no-cache libc6-compat python3 make g++ curl
+
+# 设置npm配置
+RUN npm config set legacy-peer-deps true
+RUN npm config set network-timeout 300000
+
 COPY package.json package-lock.json ./
-# 使用--no-frozen-lockfile而不是直接使用npm install，更稳定
-RUN npm ci --no-audit --no-fund
+# 回退到使用npm install，因为npm ci在ARM架构上可能不稳定
+RUN npm install --verbose || npm install --verbose --no-optional
 
 # 构建应用
 FROM base AS builder
@@ -18,9 +25,10 @@ ENV NODE_OPTIONS="--max-old-space-size=4096"
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# 使用更安全的构建命令
+# 使用更安全的构建命令，增加重试选项
 RUN echo "开始构建应用..." && \
-    npm run build || (echo "构建失败，显示错误日志:" && cat /tmp/build-error.log && exit 1)
+    (npm run build || (echo "首次构建失败，正在重试..." && npm cache clean --force && npm run build)) || \
+    (echo "构建失败，无法恢复" && exit 1)
 
 # 生产环境
 FROM base AS runner
