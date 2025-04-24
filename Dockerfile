@@ -1,31 +1,40 @@
-FROM node:20-alpine AS base
+FROM node:18-alpine AS base
 
 # 安装依赖
 FROM base AS deps
 WORKDIR /app
 
 COPY package.json package-lock.json ./
-RUN npm install
+# 使用--no-frozen-lockfile而不是直接使用npm install，更稳定
+RUN npm ci --no-audit --no-fund
 
 # 构建应用
 FROM base AS builder
 WORKDIR /app
+
+# 环境变量设置 - 增加Node内存限制
+ENV NODE_OPTIONS="--max-old-space-size=4096"
+
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-RUN npm run build
+# 使用更安全的构建命令
+RUN echo "开始构建应用..." && \
+    npm run build || (echo "构建失败，显示错误日志:" && cat /tmp/build-error.log && exit 1)
 
 # 生产环境
 FROM base AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
+# 在生产环境也设置内存限制
+ENV NODE_OPTIONS="--max-old-space-size=1024"
 
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
 # 设置正确的权限
-RUN mkdir .next
+RUN mkdir -p .next
 RUN chown nextjs:nodejs .next
 
 # 复制构建产物

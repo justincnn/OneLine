@@ -20,6 +20,18 @@ jobs:
           
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+        with:
+          driver-opts: |
+            image=moby/buildkit:v0.12.0
+            network=host
+      
+      - name: Cache Docker layers
+        uses: actions/cache@v3
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-
         
       - name: Build and push
         uses: docker/build-push-action@v5
@@ -28,5 +40,14 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           platforms: linux/arm64/v8
           tags: justincnn/oneline:latest,justincnn/oneline:${{ github.sha }}
-          cache-from: type=registry,ref=justincnn/oneline:buildcache
-          cache-to: type=registry,ref=justincnn/oneline:buildcache,mode=max
+          build-args: |
+            NODE_OPTIONS=--max-old-space-size=4096
+          cache-from: type=local,src=/tmp/.buildx-cache
+          cache-to: type=local,dest=/tmp/.buildx-cache-new,mode=max
+          outputs: type=image,push=true
+          provenance: false
+          
+      - name: Move cache
+        run: |
+          rm -rf /tmp/.buildx-cache
+          mv /tmp/.buildx-cache-new /tmp/.buildx-cache
