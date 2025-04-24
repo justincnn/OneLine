@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Timeline } from '@/components/Timeline';
@@ -15,12 +15,13 @@ import {
   SelectValue
 } from '@/components/ui/select';
 import type { TimelineData, TimelineEvent, DateFilterOption, DateFilterConfig } from '@/types';
-import { fetchTimelineData, fetchEventDetails } from '@/lib/api';
+import { fetchTimelineData, fetchEventDetails, type ProgressCallback, type TimelineEventCallback, type SummaryCallback, type EventDetailsChunkCallback } from '@/lib/api';
+import { SearchProgress, type SearchProgressStep } from '@/components/SearchProgress';
 import { toast } from 'sonner';
 import { Settings, SortDesc, SortAsc, Download, Search, ChevronDown } from 'lucide-react';
 
 function MainContent() {
-  const { apiConfig, isConfigured, isPasswordProtected, isPasswordValidated } = useApi();
+  const { apiConfig, isConfigured, isPasswordProtected, isPasswordValidated, streamingPreference } = useApi();
   const [query, setQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [timelineData, setTimelineData] = useState<TimelineData>({ events: [] });
@@ -38,8 +39,72 @@ function MainContent() {
   const [timelineVisible, setTimelineVisible] = useState(false);
   const searchRef = useRef<HTMLFormElement>(null);
   const timelineRef = useRef<HTMLDivElement>(null);
+  const timelineComponentRef = useRef<any>(null);
 
-  // 新增处理滚动的函数
+  // 新增进度状态
+  const [searchProgressVisible, setSearchProgressVisible] = useState(false);
+  const [searchProgressSteps, setSearchProgressSteps] = useState<SearchProgressStep[]>([]);
+  const [searchProgressActive, setSearchProgressActive] = useState(false);
+
+  // 新增流式输出相关状态
+  const [streamingEvents, setStreamingEvents] = useState<TimelineEvent[]>([]);
+  const [streamingSummary, setStreamingSummary] = useState<string>('');
+  const [isStreamingDetails, setIsStreamingDetails] = useState(false);
+  const [currentStreamingContent, setCurrentStreamingContent] = useState('');
+
+  // 进度回调函数
+  const progressCallback: ProgressCallback = (message, status) => {
+    const newStep: SearchProgressStep = {
+      id: `step-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+      message,
+      status,
+      timestamp: new Date()
+    };
+
+    setSearchProgressSteps(prev => [...prev, newStep]);
+
+    // 如果是错误或完成状态，不再激活
+    if (status !== 'pending') {
+      // 但只更新这一步的状态，不改变整体进度条的激活状态
+    } else {
+      setSearchProgressActive(true);
+    }
+  };
+
+  // 事件流式接收回调，考虑用户偏好
+  const eventReceivedCallback: TimelineEventCallback = useCallback((event) => {
+    // 只有在用户启用流式输出时才处理流式事件
+    if (streamingPreference) {
+      setStreamingEvents(prev => {
+        const exists = prev.some(e => e.id === event.id || (e.title === event.title && e.date === event.date));
+        if (exists) return prev;
+        const newEvents = [...prev, event];
+        return sortEvents(newEvents);
+      });
+    }
+  }, [streamingPreference]);
+
+  // 总结流式接收回调，考虑用户偏好
+  const summaryReceivedCallback: SummaryCallback = useCallback((summary) => {
+    if (streamingPreference) {
+      setStreamingSummary(summary);
+    }
+  }, [streamingPreference]);
+
+  // 事件详情流式接收回调，考虑用户偏好
+  const detailsChunkCallback: EventDetailsChunkCallback = useCallback((chunk) => {
+    if (streamingPreference) {
+      setCurrentStreamingContent(prev => {
+        const newContent = prev + chunk;
+        if (timelineComponentRef.current) {
+          timelineComponentRef.current.updateDetailsContent(newContent);
+        }
+        return newContent;
+      });
+    }
+  }, [streamingPreference]);
+
+  // 处理滚动到时间轴
   const scrollToTimeline = () => {
     if (timelineRef.current) {
       const header = document.querySelector('header');
@@ -68,9 +133,26 @@ function MainContent() {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
+  // 当流式事件更新时，更新过滤后的事件列表
+  useEffect(() => {
+    if (streamingEvents.length > 0) {
+      filterAndSortEvents(streamingEvents);
+    }
+  }, [streamingEvents, dateFilter, sortDirection]);
+
   // Effect to filter events based on date filter
   useEffect(() => {
-    if (timelineData.events.length === 0) {
+    if (timelineData.events.length === 0 && streamingEvents.length === 0) {
+      setFilteredEvents([]);
+      return;
+    }
+    const events = timelineData.events.length > 0 ? timelineData.events : streamingEvents;
+    filterAndSortEvents(events);
+  }, [timelineData.events, dateFilter, sortDirection]);
+
+  // 过滤并排序事件
+  const filterAndSortEvents = (events: TimelineEvent[]) => {
+    if (events.length === 0) {
       setFilteredEvents([]);
       return;
     }
@@ -95,37 +177,29 @@ function MainContent() {
         startDate = dateFilter.startDate;
         break;
       default:
-        // 'all' option - no filtering
-        setFilteredEvents(sortEvents(timelineData.events));
+        setFilteredEvents(sortEvents(events));
         return;
     }
 
     const endDate = dateFilter.option === 'custom' ? dateFilter.endDate : undefined;
 
-    // Filter events based on date
-    const filtered = timelineData.events.filter(event => {
-      // Parse the event date with various formats
+    const filtered = events.filter(event => {
       const dateParts = event.date.split('-').map(Number);
       let eventDate: Date;
 
       if (dateParts.length === 3) {
-        // Full date: YYYY-MM-DD
         eventDate = new Date(dateParts[0], dateParts[1] - 1, dateParts[2]);
       } else if (dateParts.length === 2) {
-        // Month precision: YYYY-MM
         eventDate = new Date(dateParts[0], dateParts[1] - 1, 1);
       } else if (dateParts.length === 1) {
-        // Year precision: YYYY
         eventDate = new Date(dateParts[0], 0, 1);
       } else {
-        // Invalid date format, include by default
         return true;
       }
 
       if (startDate && eventDate < startDate) {
         return false;
       }
-
       if (endDate && eventDate > endDate) {
         return false;
       }
@@ -133,18 +207,17 @@ function MainContent() {
       return true;
     });
 
-    // Sort the filtered events based on current sort direction
     setFilteredEvents(sortEvents(filtered));
-  }, [timelineData.events, dateFilter, sortDirection]);
+  };
 
   // Function to sort events based on sort direction
   const sortEvents = (events: TimelineEvent[]): TimelineEvent[] => {
     return [...events].sort((a, b) => {
-      const dateA = a.date.replace(/\D/g, ''); // Remove non-digit characters
+      const dateA = a.date.replace(/\D/g, '');
       const dateB = b.date.replace(/\D/g, '');
       return sortDirection === 'asc'
-        ? dateA.localeCompare(dateB)  // oldest first (ascending)
-        : dateB.localeCompare(dateA); // newest first (descending)
+        ? dateA.localeCompare(dateB)
+        : dateB.localeCompare(dateA);
     });
   };
 
@@ -161,41 +234,43 @@ function MainContent() {
       return;
     }
 
-    // 检查API是否已配置，以及是否已通过密码验证（如果需要）
     if (!isConfigured) {
       toast.info('请先配置API设置');
       setShowSettings(true);
       return;
     }
 
-    // 如果有密码保护但未验证，提示需要验证密码
     if (isPasswordProtected && !isPasswordValidated) {
       toast.info('请先验证访问密码');
       setShowSettings(true);
       return;
     }
 
-    // 如果搜索框在中央，则先将其移动到顶部
+    setStreamingEvents([]);
+    setStreamingSummary('');
+    setSearchProgressSteps([]);
+    setSearchProgressActive(true);
+    setSearchProgressVisible(true);
+    setError('');
+
     if (searchPosition === 'center') {
       setSearchPosition('top');
-
-      // 等待动画完成后再获取数据
       setTimeout(() => {
         fetchData();
-      }, 700); // 与CSS动画持续时间匹配
+      }, 700);
     } else {
-      // 如果已经在顶部，直接获取数据
       fetchData();
     }
   };
 
+  // 更新fetchData函数，使用用户的流式输出偏好
   const fetchData = async () => {
     setIsLoading(true);
     setError('');
-    setTimelineVisible(false);
+    setTimelineData({ events: [] });
+    setTimelineVisible(true);
 
     try {
-      // Add date range to query if filter is set
       let queryWithDateFilter = query;
 
       if (dateFilter.option !== 'all') {
@@ -228,19 +303,31 @@ function MainContent() {
         queryWithDateFilter += dateRangeText;
       }
 
-      const data = await fetchTimelineData(queryWithDateFilter, apiConfig);
-      setTimelineData(data);
+      // 使用流式回调获取数据，根据用户偏好决定是否传递回调
+      const data = await fetchTimelineData(
+        queryWithDateFilter,
+        apiConfig,
+        progressCallback,
+        streamingPreference ? eventReceivedCallback : undefined,
+        streamingPreference ? summaryReceivedCallback : undefined
+      );
 
-      // 显示时间轴，添加动画延迟
+      // 如果没有通过流式获取到事件，或者用户禁用了流式输出，则使用传统方式获取的事件
+      if (streamingEvents.length === 0 || !streamingPreference) {
+        setTimelineData(data);
+      }
+
+      if (data.events.length > 0 || streamingEvents.length > 0) {
+        setTimeout(scrollToTimeline, 300);
+      }
+
+      setSearchProgressActive(false);
+
       setTimeout(() => {
-        setTimelineVisible(true);
-        // 滚动到时间轴
-        if (data.events.length > 0) {
-          setTimeout(scrollToTimeline, 300);
-        }
-      }, 300);
+        setSearchProgressVisible(false);
+      }, 3000);
 
-      if (data.events.length === 0) {
+      if (data.events.length === 0 && streamingEvents.length === 0) {
         toast.warning('未找到相关事件，请尝试其他关键词');
       }
     } catch (err: unknown) {
@@ -248,6 +335,8 @@ function MainContent() {
       setError(errorMessage);
       toast.error(errorMessage);
       console.error('Error fetching timeline data:', err);
+
+      setSearchProgressActive(false);
     } finally {
       setIsLoading(false);
     }
@@ -261,7 +350,6 @@ function MainContent() {
 
   const handleDateFilterChange = (value: DateFilterOption) => {
     if (value === 'custom') {
-      // For custom date range, set both start and end dates if they haven't been set yet
       setDateFilter({
         option: value,
         startDate: startDate ? new Date(startDate) : undefined,
@@ -292,36 +380,61 @@ function MainContent() {
     }
   };
 
+  // 更新handleRequestDetails，使用用户的流式输出偏好
   const handleRequestDetails = async (event: TimelineEvent): Promise<string> => {
-    // 检查API是否已配置，以及是否已通过密码验证（如果需要）
     if (!isConfigured) {
       toast.info('请先配置API设置');
       setShowSettings(true);
       return '请先配置API设置';
     }
 
-    // 如果有密码保护但未验证，提示需要验证密码
     if (isPasswordProtected && !isPasswordValidated) {
       toast.info('请先验证访问密码');
       setShowSettings(true);
       return '请先验证访问密码';
     }
 
+    setSearchProgressSteps([]);
+    setSearchProgressActive(true);
+    setSearchProgressVisible(true);
+
+    setIsStreamingDetails(streamingPreference);
+    setCurrentStreamingContent('');
+
     try {
-      // 构建更具体的查询，包含事件日期和标题，添加更详细的分析指导
       const detailedQuery = `事件：${event.title}（${event.date}）\n\n请提供该事件的详细分析，包括事件背景、主要过程、关键人物、影响与意义。请尽可能提供多方观点，并分析该事件在${query}整体发展中的位置与作用。`;
 
       const detailsContent = await fetchEventDetails(
         event.id,
         detailedQuery,
-        apiConfig
+        apiConfig,
+        progressCallback,
+        streamingPreference ? detailsChunkCallback : undefined
       );
+
+      if (streamingPreference) {
+        if (timelineComponentRef.current) {
+          timelineComponentRef.current.completeStreamingDetails();
+        }
+      } else {
+        setCurrentStreamingContent(detailsContent);
+      }
+
+      setTimeout(() => {
+        setSearchProgressVisible(false);
+        setSearchProgressActive(false);
+        setIsStreamingDetails(false);
+      }, 3000);
 
       return detailsContent;
     } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : '获取详细信息失败';
       toast.error(errorMessage);
       console.error('Error fetching event details:', err);
+
+      setSearchProgressActive(false);
+      setIsStreamingDetails(false);
+
       return '获取详细信息失败，请稍后再试';
     }
   };
@@ -333,7 +446,6 @@ function MainContent() {
       return;
     }
 
-    // Use html2canvas library
     import('html2canvas').then(({ default: html2canvas }) => {
       const timelineElement = document.querySelector('.timeline-container') as HTMLElement;
       if (!timelineElement) {
@@ -344,13 +456,12 @@ function MainContent() {
       toast.info('正在生成图片，请稍候...');
 
       html2canvas(timelineElement, {
-        scale: 2, // Higher scale for better quality
+        scale: 2,
         logging: false,
         useCORS: true,
         allowTaint: true,
         backgroundColor: '#ffffff'
       }).then(canvas => {
-        // Convert to image and download
         const fileName = `一线-${query.replace(/\s+/g, '-')}-${new Date().toISOString().slice(0, 10)}.png`;
         const link = document.createElement('a');
         link.download = fileName;
@@ -370,11 +481,9 @@ function MainContent() {
 
   return (
     <main className="flex min-h-screen flex-col relative">
-      {/* 背景渐变装饰 */}
       <div className="bg-gradient-purple" />
       <div className="bg-gradient-blue" />
 
-      {/* 头部 - 位于顶部固定不动 */}
       <header className="fixed top-0 left-0 w-full z-20 flex justify-end items-center p-4 md:px-8">
         <div className="flex gap-2">
           <ThemeToggle />
@@ -389,14 +498,13 @@ function MainContent() {
         </div>
       </header>
 
-      {/* 搜索表单 - 可以在中央和顶部之间切换 */}
       <form
         ref={searchRef}
         onSubmit={handleSubmit}
         className={searchPosition === 'center' ? 'search-container-center' : 'search-container-top'}
       >
         {searchPosition === 'center' && (
-          <div className="flex flex-col items-center mb-8 animate-slide-down">
+          <div className="flex flex-col items-center mb-8 animate-slideDown">
             <h1 className="text-4xl md:text-5xl font-bold mb-4 text-center page-title">一线</h1>
             <p className="text-lg md:text-xl text-muted-foreground mb-8 text-center max-w-xl mx-auto">
               AI驱动的热点事件时间轴 · 洞察历史脉络
@@ -455,7 +563,6 @@ function MainContent() {
             </div>
           </div>
 
-          {/* 自定义日期范围输入 */}
           {dateFilter.option === 'custom' && (
             <div className="flex flex-col sm:flex-row gap-2 mt-3 glass p-3 rounded-xl">
               <div className="flex-1 flex gap-2 items-center">
@@ -483,7 +590,15 @@ function MainContent() {
         </div>
       </form>
 
-      {/* 时间轴容器 */}
+      <div className={`w-full max-w-3xl mx-auto px-4 transition-opacity duration-300 ${searchProgressVisible ? 'opacity-100' : 'opacity-0'}`}
+           style={{marginTop: searchPosition === 'center' ? "calc(50vh + 180px)" : "80px", zIndex: 15}}>
+        <SearchProgress
+          steps={searchProgressSteps}
+          visible={searchProgressVisible}
+          isActive={searchProgressActive}
+        />
+      </div>
+
       <div className="flex-1 pt-24 pb-12 px-4 md:px-8 w-full max-w-6xl mx-auto">
         {(timelineVisible || isLoading) && (
           <div
@@ -527,10 +642,12 @@ function MainContent() {
             )}
 
             <Timeline
+              ref={timelineComponentRef}
               events={filteredEvents}
               isLoading={isLoading}
               onRequestDetails={handleRequestDetails}
-              summary={timelineData.summary}
+              summary={streamingSummary || timelineData.summary}
+              streamingDetails={isStreamingDetails}
             />
           </div>
         )}
@@ -541,7 +658,6 @@ function MainContent() {
         onOpenChange={setShowSettings}
       />
 
-      {/* Floating API settings button */}
       {showFloatingButton && (
         <Button
           variant="secondary"

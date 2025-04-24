@@ -119,7 +119,31 @@
   50% { transform: translateX(5px); }
 }
 
-.animate-fade-in {
+/* 覆盖 blink 动画用于流式输出 */
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+/* 新增: 流式输出光标动画 */
+@keyframes cursorPulse {
+  0%, 100% { opacity: 0.8; }
+  50% { opacity: 0.2; }
+}
+
+/* 新增: 文本高亮出现动画 */
+@keyframes highlightFade {
+  0% { background-color: rgba(var(--primary), 0.15); }
+  100% { background-color: transparent; }
+}
+
+/* 新增: 打字机效果增强 */
+@keyframes typingBlink {
+  0%, 100% { border-color: hsl(var(--primary)); }
+  50% { border-color: transparent; }
+}
+
+.animate-fadeIn {
   animation: fadeIn 0.5s ease-in-out forwards;
 }
 
@@ -141,6 +165,21 @@
 
 .animate-float-right {
   animation: floatRight 8s ease-in-out infinite;
+}
+
+.animate-blink {
+  animation: blink 1s infinite;
+}
+
+/* 新增: 增强的打字机动画 */
+.animate-typing-cursor {
+  border-right: 2px solid;
+  animation: typingBlink 0.7s step-end infinite;
+}
+
+/* 新增: 提供新的高亮效果样式 */
+.animate-highlight {
+  animation: highlightFade 1s ease-out forwards;
 }
 
 /* 输入框动画 */
@@ -172,9 +211,31 @@
   @apply shadow-xl -translate-y-1;
 }
 
+/* 新增：流式事件卡片特殊效果 */
+.event-card.border-l-primary\/70 {
+  box-shadow: 0 0 15px rgba(var(--primary), 0.1);
+  transition: box-shadow 0.5s ease;
+}
+
+.event-card.border-l-primary\/70:hover {
+  box-shadow: 0 0 20px rgba(var(--primary), 0.2);
+}
+
 .event-date {
   @apply glass text-xs sm:text-sm text-muted-foreground whitespace-nowrap
          mb-1 sm:mb-2 px-3 py-1.5 rounded-full;
+}
+
+/* 搜索进度组件样式 */
+.search-progress-card {
+  @apply glass-card rounded-xl overflow-hidden fixed left-1/2 transform -translate-x-1/2
+         shadow-xl z-20 w-full max-w-md mx-auto animate-fadeIn;
+  bottom: 5rem;
+}
+
+.loading-dot {
+  @apply rounded-full bg-primary/60;
+  animation: blink 1.5s infinite;
 }
 
 /* 渐变背景装饰 */
@@ -225,4 +286,286 @@
 /* 加载动画 */
 .loading-spinner {
   @apply h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin;
+}
+
+/* 流式输出的加载动画 */
+.loading-dots {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.loading-dots .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: currentColor;
+  opacity: 0.6;
+}
+
+.loading-dots .dot:nth-child(1) {
+  animation: dotPulse 1.4s infinite 0.2s;
+}
+
+.loading-dots .dot:nth-child(2) {
+  animation: dotPulse 1.4s infinite 0.4s;
+}
+
+.loading-dots .dot:nth-child(3) {
+  animation: dotPulse 1.4s infinite 0.6s;
+}
+
+@keyframes dotPulse {
+  0%, 60%, 100% { transform: scale(1); opacity: 0.6; }
+  30% { transform: scale(1.5); opacity: 1; }
+}
+
+/* 流式输出相关的动画效果 */
+.streaming-text-container {
+  line-height: 1.6;
+  word-break: break-word;
+  position: relative;
+}
+
+.streaming-text-container a {
+  color: theme('colors.blue.500');
+  text-decoration: underline;
+}
+
+.streaming-text-container code {
+  background-color: theme('colors.gray.100');
+  color: theme('colors.rose.500');
+  padding: 0.1rem 0.2rem;
+  border-radius: 0.2rem;
+  font-family: monospace;
+}
+
+.dark .streaming-text-container code {
+  background-color: theme('colors.gray.800');
+  color: theme('colors.rose.400');
+}
+
+/* 增强流式输出容器样式 */
+.streaming-text-container h1,
+.streaming-text-container h2,
+.streaming-text-container h3 {
+  margin-top: 1rem;
+  margin-bottom: 0.5rem;
+  color: hsl(var(--primary));
+}
+
+.streaming-text-container blockquote {
+  border-left: 3px solid rgba(var(--primary), 0.5);
+  padding-left: 1rem;
+  margin: 0.5rem 0;
+  color: theme('colors.gray.600');
+}
+
+.dark .streaming-text-container blockquote {
+  color: theme('colors.gray.400');
+}
+
+.streaming-text-container li {
+  margin-left: 1rem;
+  position: relative;
+}
+
+.streaming-text-container li::before {
+  content: "•";
+  position: absolute;
+  left: -1rem;
+  color: hsl(var(--primary));
+}
+
+/* 新增：关键词高亮效果 */
+.streaming-text-container mark {
+  background-color: rgba(var(--primary), 0.2);
+  color: inherit;
+  padding: 0.1rem 0.2rem;
+  border-radius: 0.2rem;
+}
+
+/* 更平滑的打字机效果 */
+.typing-effect {
+  overflow: hidden;
+}
+
+/* 新增：流式光标效果 */
+.streaming-cursor {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  background-color: currentColor;
+  margin-left: 0.2rem;
+  vertical-align: middle;
+  animation: cursorPulse 0.8s infinite;
+}
+
+/* 添加行高亮效果 */
+.streaming-text-container p:nth-child(odd) {
+  background-color: rgba(0, 0, 0, 0.02);
+}
+
+.dark .streaming-text-container p:nth-child(odd) {
+  background-color: rgba(255, 255, 255, 0.02);
+}
+
+/* 添加分段动画效果 */
+.stream-paragraph-appear {
+  animation: fadeIn 0.3s ease forwards;
+}
+
+/* 新增：打字效果高亮 */
+.typed-character {
+  opacity: 0;
+  animation: typeCharacter 0.05s forwards;
+}
+
+@keyframes typeCharacter {
+  to { opacity: 1; }
+}
+
+/* 修改事件卡片进入动画 */
+.timeline-card-streaming {
+  animation: streamCardEnter 0.5s ease forwards;
+}
+
+@keyframes streamCardEnter {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 流式事件卡片的旧动画（兼容） */
+.timeline-card-streaming-old {
+  animation: fade-slide-up 0.5s ease-out forwards;
+}
+
+@keyframes fade-slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 打字机效果 */
+@keyframes typing {
+  from {
+    border-right-color: hsl(var(--primary));
+  }
+  to {
+    border-right-color: transparent;
+  }
+}
+
+.typing-effect {
+  white-space: pre-wrap;
+  animation: typing 0.05s steps(1);
+  border-right: 2px solid transparent;
+}
+
+<<<<<<< HEAD
+/* 新增的流式渲染动画效果 */
+@keyframes cardPulse {
+  0%, 100% { transform: translateX(0); box-shadow: 0 0 0 rgba(var(--primary), 0.1); }
+  50% { transform: translateX(2px); box-shadow: 0 0 15px rgba(var(--primary), 0.2); }
+}
+
+@keyframes highlightNew {
+  0% { border-color: hsl(var(--primary)); }
+  50% { border-color: hsl(var(--primary) / 0.4); }
+  100% { border-color: hsl(var(--primary)); }
+}
+
+@keyframes fadeInScale {
+  0% { opacity: 0; transform: scale(0.95); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+.timeline-card-new {
+  animation: cardPulse 2s ease-in-out, highlightNew 2s ease-in-out infinite;
+}
+
+/* 强化流式输出卡片动画 */
+.timeline-card-streaming {
+  animation: fadeInScale 0.5s ease-out forwards;
+}
+
+/* 高亮新内容效果 */
+.streaming-highlight {
+  background-color: rgba(var(--primary), 0.1);
+  border-radius: 0.25rem;
+  padding: 0.1rem 0.25rem;
+  animation: highlightFade 2s forwards;
+}
+
+@keyframes highlightFade {
+  0% { background-color: rgba(var(--primary), 0.2); }
+  100% { background-color: transparent; }
+}
+
+/* 更平滑的段落过渡 */
+.streaming-text-content p,
+.streaming-text-content h1,
+.streaming-text-content h2,
+.streaming-text-content h3,
+.streaming-text-content h4 {
+  animation: fadeIn 0.3s ease-out;
+}
+
+/* 重写流式文本卡片样式 */
+.event-card.border-l-4 {
+  transition: all 0.3s ease;
+}
+
+.event-card.border-l-4:hover {
+  border-left-width: 6px;
+=======
+/* 新增：专门为流式API分析添加的动画效果 */
+.ai-analysis-title {
+  display: inline-block;
+  position: relative;
+  padding-left: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.ai-analysis-title::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  width: 3px;
+  background-color: hsl(var(--primary));
+  border-radius: 1px;
+}
+
+/* 新增：强调重要文本的动画 */
+.highlight-text {
+  position: relative;
+  padding: 0 0.2rem;
+  box-decoration-break: clone;
+}
+
+.highlight-text::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 0.3em;
+  background-color: rgba(var(--primary), 0.2);
+  z-index: -1;
+  border-radius: 0.1em;
+>>>>>>> origin/dev
 }

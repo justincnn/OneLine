@@ -17,6 +17,8 @@ interface ApiContextType {
   hasEnvConfig: boolean; // 新增：是否存在环境变量配置
   useEnvConfig: boolean; // 新增：是否使用环境变量配置
   setUseEnvConfig: (use: boolean) => void; // 新增：设置是否使用环境变量配置
+  streamingPreference: boolean; // 新增：流式输出偏好
+  setStreamingPreference: (enabled: boolean) => void; // 新增：设置流式输出偏好
 }
 
 const defaultApiConfig: ApiConfig = {
@@ -48,6 +50,8 @@ const ApiContext = createContext<ApiContextType>({
   hasEnvConfig: false,
   useEnvConfig: false,
   setUseEnvConfig: () => {},
+  streamingPreference: true, // 默认启用流式输出
+  setStreamingPreference: () => {},
 });
 
 export const useApi = () => useContext(ApiContext);
@@ -61,6 +65,7 @@ export function ApiProvider({ children }: { children: React.ReactNode }) {
   const [hasEnvConfig, setHasEnvConfig] = useState<boolean>(false); // 新增：是否存在环境变量配置
   const [useEnvConfig, setUseEnvConfig] = useState<boolean>(false); // 新增：是否使用环境变量配置
   const [userConfig, setUserConfig] = useState<ApiConfig | null>(null); // 新增：用户自定义配置
+  const [streamingPreference, setStreamingPreference] = useState<boolean>(true); // 新增：流式输出偏好
 
   // 初始化API配置，优先使用环境变量，然后是localStorage
   useEffect(() => {
@@ -109,6 +114,14 @@ export function ApiProvider({ children }: { children: React.ReactNode }) {
 
       // 是否使用环境变量配置
       let shouldUseEnvConfig = hasServerConfig;
+
+      // 加载流式输出偏好设置
+      if (typeof window !== 'undefined') {
+        const storedStreamingPreference = localStorage.getItem('oneLine_streamingPreference');
+        if (storedStreamingPreference !== null) {
+          setStreamingPreference(storedStreamingPreference === 'true');
+        }
+      }
 
       // 如果允许用户配置，尝试从localStorage加载
       if (userConfigAllowed && typeof window !== 'undefined') {
@@ -180,6 +193,16 @@ export function ApiProvider({ children }: { children: React.ReactNode }) {
       console.error('Failed to initialize API config:', error);
     }
   }, []);
+
+  // 更新流式输出偏好
+  const handleStreamingPreference = (enabled: boolean) => {
+    setStreamingPreference(enabled);
+
+    // 保存到localStorage
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('oneLine_streamingPreference', enabled.toString());
+    }
+  };
 
   // 更新是否使用环境变量配置
   const handleUseEnvConfig = (use: boolean) => {
@@ -286,7 +309,9 @@ export function ApiProvider({ children }: { children: React.ReactNode }) {
       setPasswordValidated: setPasswordValidatedSafe,
       hasEnvConfig,
       useEnvConfig,
-      setUseEnvConfig: handleUseEnvConfig
+      setUseEnvConfig: handleUseEnvConfig,
+      streamingPreference,
+      setStreamingPreference: handleStreamingPreference
     }}>
       {children}
     </ApiContext.Provider>
