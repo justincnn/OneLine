@@ -7,7 +7,8 @@ services:
       - "1212:3000"
     environment:
       - NODE_ENV=production
-      # API配置（二选一配置方式）
+      # 提示：取消注释（删除#）并修改以下参数来配置应用
+
       # 方式1：使用外部API服务（如OpenAI、Google Gemini等）
       # - NEXT_PUBLIC_API_ENDPOINT=https://api.example.com/v1/chat/completions
       # - NEXT_PUBLIC_API_MODEL=gemini-2.0-pro-exp-search
@@ -19,7 +20,7 @@ services:
       
       # 安全设置
       # - NEXT_PUBLIC_ALLOW_USER_CONFIG=true
-      # - NEXT_PUBLIC_ACCESS_PASSWORD=your_access_password_here
+      # - NEXT_PUBLIC_ACCESS_PASSWORD=your_access_password
     restart: always
     # 可选：如果需要持久化存储，取消下面注释
     # volumes:

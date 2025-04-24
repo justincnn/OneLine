@@ -31,6 +31,11 @@ RUN chown nextjs:nodejs .next
 # 复制构建产物
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+# 复制环境变量处理脚本
+COPY --from=builder --chown=nextjs:nodejs /app/fix-env.js ./
+
+# 创建启动脚本
+RUN echo '#!/bin/sh\nnode fix-env.js && node server.js' > ./start.sh && chmod +x ./start.sh
 
 USER nextjs
 
@@ -39,4 +44,4 @@ EXPOSE 3000
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
-CMD ["node", "server.js"] 
+CMD ["./start.sh"] 
