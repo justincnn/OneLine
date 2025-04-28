@@ -2,6 +2,9 @@ FROM node:18-alpine
 
 WORKDIR /app
 
+# 安装构建所需工具
+RUN apk add --no-cache libc6-compat
+
 # 复制项目文件
 COPY . .
 
@@ -10,9 +13,9 @@ ENV NODE_OPTIONS="--max-old-space-size=4096"
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
-# 安装依赖并构建
-RUN npm install
-RUN npm run build
+# 使用npm ci确保依赖一致性，并构建
+RUN npm ci
+RUN npx next build
 
 # 启动应用
 EXPOSE 3000

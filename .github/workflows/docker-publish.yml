@@ -22,11 +22,15 @@ jobs:
           cache: 'npm'
       
       - name: Install dependencies
-        run: npm install
+        run: |
+          npm ci
+          npm list --depth=0
       
-      - name: Build Next.js
-        run: NODE_ENV=production npm run build
-      
+      - name: Build Next.js with more verbose output
+        run: |
+          export NODE_OPTIONS="--max-old-space-size=4096"
+          NODE_ENV=production npx next build --debug
+        
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
       
