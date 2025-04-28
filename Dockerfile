@@ -14,7 +14,7 @@ FROM base AS builder
 WORKDIR /app
 
 # 设置环境变量 - 增加内存限制
-ENV NODE_OPTIONS="--max-old-space-size=8192"
+ENV NODE_OPTIONS="--max-old-space-size=4096"
 
 # 复制依赖
 COPY --from=deps /app/node_modules ./node_modules

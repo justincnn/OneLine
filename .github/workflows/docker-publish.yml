@@ -23,13 +23,13 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
       
-      # 无需多架构构建，直接构建amd64版本并推送
+      # 修改为arm64架构构建
       - name: Build and push
         uses: docker/build-push-action@v5
         with:
           context: .
           push: ${{ github.event_name != 'pull_request' }}
-          platforms: linux/amd64
+          platforms: linux/arm64
           tags: justincnn/oneline:latest,justincnn/oneline:${{ github.sha }}
           cache-from: type=registry,ref=justincnn/oneline:latest
           cache-to: type=inline
