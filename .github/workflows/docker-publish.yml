@@ -21,10 +21,10 @@ jobs:
           node-version: '18'
           cache: 'npm'
       
-      - name: Install dependencies
+      - name: Update dependencies and lock file
         run: |
-          npm ci
-          npm list --depth=0
+          npm install
+          git status
       
       - name: Build Next.js with more verbose output
         run: |

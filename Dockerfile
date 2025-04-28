@@ -13,8 +13,8 @@ ENV NODE_OPTIONS="--max-old-space-size=4096"
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
-# 使用npm ci确保依赖一致性，并构建
-RUN npm ci
+# 使用npm install安装依赖，然后构建
+RUN npm install
 RUN npx next build
 
 # 启动应用
