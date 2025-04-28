@@ -6,8 +6,8 @@ WORKDIR /app
 
 # 复制package.json和package-lock.json
 COPY package.json package-lock.json ./
-# 安装依赖 - 使用普通install而非ci
-RUN npm install
+# 安装依赖 - 添加--production标志减少依赖
+RUN npm install --no-optional --production=false
 
 # 构建应用
 FROM base AS builder
@@ -15,6 +15,7 @@ WORKDIR /app
 
 # 设置环境变量 - 增加内存限制
 ENV NODE_OPTIONS="--max-old-space-size=4096"
+ENV NODE_ENV=production
 
 # 复制依赖
 COPY --from=deps /app/node_modules ./node_modules
