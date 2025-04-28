@@ -1,4 +1,4 @@
-FROM node:16 AS base
+FROM node:18-alpine AS base
 
 # 安装依赖
 FROM base AS deps
@@ -6,8 +6,8 @@ WORKDIR /app
 
 # 复制package.json和package-lock.json
 COPY package.json package-lock.json ./
-# 安装依赖 - 添加--production标志减少依赖
-RUN npm install --no-optional --production=false
+# 简化安装命令
+RUN npm install
 
 # 构建应用
 FROM base AS builder
@@ -26,7 +26,7 @@ COPY . .
 RUN npm run build
 
 # 生产环境
-FROM node:16-alpine AS runner
+FROM node:18-alpine AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
