@@ -1,26 +1,54 @@
 "use client";
 
+<<<<<<< HEAD
 import React, { useState, useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
+=======
+import React, { useState, useEffect, useRef } from 'react';
+>>>>>>> upstream/main
 import type { TimelineEvent, Person } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Avatar } from '@/components/ui/avatar';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+<<<<<<< HEAD
 import { StreamingText } from './StreamingText';
+=======
+import { StreamCallback } from '@/lib/api';
+>>>>>>> upstream/main
 
 interface TimelineProps {
   events: TimelineEvent[];
   isLoading?: boolean;
-  onRequestDetails: (event: TimelineEvent) => Promise<string>;
+  onRequestDetails: (event: TimelineEvent, streamCallback?: StreamCallback) => Promise<string>;
   summary?: string;
   streamingDetails?: boolean;
 }
 
+<<<<<<< HEAD
 export interface TimelineHandle {
   updateDetailsContent: (content: string) => void;
   completeStreamingDetails: () => void;
 }
+=======
+export function Timeline({ events, isLoading = false, onRequestDetails, summary }: TimelineProps) {
+  const [selectedEvent, setSelectedEvent] = useState<TimelineEvent | null>(null);
+  const [detailsContent, setDetailsContent] = useState<string>('');
+  const [showDetails, setShowDetails] = useState<boolean>(false);
+  const [expandedEvents, setExpandedEvents] = useState<Set<string>>(new Set());
+  const [isLoadingDetails, setIsLoadingDetails] = useState<boolean>(false);
+  const [isStreamingDetails, setIsStreamingDetails] = useState<boolean>(false);
+
+  // 用于存储流式响应的ref
+  const streamContentRef = useRef<string>('');
+
+  // 清理流式响应缓存
+  useEffect(() => {
+    if (!showDetails) {
+      streamContentRef.current = '';
+    }
+  }, [showDetails]);
+>>>>>>> upstream/main
 
 export const Timeline = forwardRef<TimelineHandle, TimelineProps>(
   function Timeline({ events, isLoading = false, onRequestDetails, summary, streamingDetails = false }: TimelineProps, ref) {
@@ -42,6 +70,7 @@ export const Timeline = forwardRef<TimelineHandle, TimelineProps>(
       }
     }));
 
+<<<<<<< HEAD
     // 处理新事件到达时的动画效果
     useEffect(() => {
       // 找出新事件
@@ -50,6 +79,85 @@ export const Timeline = forwardRef<TimelineHandle, TimelineProps>(
         if (event.id.startsWith('stream-')) {
           newEventIds.add(event.id);
         }
+=======
+  const handleShowDetails = async (event: TimelineEvent) => {
+    setSelectedEvent(event);
+    setDetailsContent('');
+    setShowDetails(true);
+    setIsLoadingDetails(true);
+    setIsStreamingDetails(true);
+    streamContentRef.current = '';
+
+    try {
+      // 流式回调处理函数
+      const streamCallback: StreamCallback = (chunk, isDone) => {
+        streamContentRef.current += chunk;
+        setDetailsContent(streamContentRef.current);
+
+        if (isDone) {
+          setIsStreamingDetails(false);
+          setIsLoadingDetails(false);
+        }
+      };
+
+      // 使用流式请求
+      await onRequestDetails(event, streamCallback);
+    } catch (error) {
+      console.error('Failed to fetch details:', error);
+      setIsStreamingDetails(false);
+      setIsLoadingDetails(false);
+    }
+  };
+
+  const renderPeople = (people: Person[]) => {
+    return (
+      <div className="flex flex-wrap gap-1 sm:gap-2 mt-2">
+        {people.map((person, index) => (
+          <div
+            key={`${person.name}-${index}`}
+            className="flex items-center gap-1 rounded-full px-1.5 sm:px-2 py-0.5 sm:py-1 text-xs backdrop-blur-md"
+            style={{
+              backgroundColor: `${person.color}20`,
+              borderLeft: `3px solid ${person.color}`,
+              boxShadow: `0 0 10px ${person.color}10`
+            }}
+          >
+            <Avatar className="h-4 w-4 sm:h-5 sm:w-5">
+              <div
+                className="h-full w-full rounded-full"
+                style={{ backgroundColor: person.color }}
+              />
+            </Avatar>
+            <span style={{ color: person.color }} className="text-xs">
+              {person.name}
+            </span>
+            {person.role && (
+              <span className="text-xs opacity-70 hidden sm:inline"> - {person.role}</span>
+            )}
+          </div>
+        ))}
+      </div>
+    );
+  };
+
+  const renderMarkdown = (content: string) => {
+    const formatMarkdownText = (text: string) => {
+      const boldRegex = /\*\*(.*?)\*\*/g;
+      let formatted = text.replace(boldRegex, '<strong>$1</strong>');
+
+      const italicRegex = /\*(.*?)\*/g;
+      formatted = formatted.replace(italicRegex, '<em>$1</em>');
+
+      const codeRegex = /`(.*?)`/g;
+      formatted = formatted.replace(codeRegex, '<code>$1</code>');
+
+      // 添加对Markdown链接的处理，解决链接尾部带括号或方括号的问题
+      const linkRegex = /\[(.*?)\]\((.*?)\)/g;
+      formatted = formatted.replace(linkRegex, (match, text, url) => {
+        // 移除URL中可能的尾部括号和方括号
+        const cleanUrl = url.replace(/[\)\]]$/, '');
+        return `<a href="${cleanUrl}" target="_blank" rel="noopener noreferrer" class="text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 underline">${text}</a>`;
+>>>>>>> upstream/main
       });
 
       setAnimateNewEvents(newEventIds);
@@ -429,4 +537,141 @@ export const Timeline = forwardRef<TimelineHandle, TimelineProps>(
       </div>
     );
   }
+<<<<<<< HEAD
 );
+=======
+
+  return (
+    <div className="w-full max-w-3xl mx-auto">
+      {summary && (
+        <Card className="mb-6 sm:mb-8 glass-card rounded-xl">
+          <CardHeader className="p-4 sm:p-6">
+            <CardTitle className="text-lg sm:text-xl">事件总结</CardTitle>
+          </CardHeader>
+          <CardContent className="p-4 sm:p-6 pt-0 sm:pt-0">
+            <p className="text-sm sm:text-base">{summary}</p>
+          </CardContent>
+        </Card>
+      )}
+
+      <div className="flex flex-col gap-4 sm:gap-6 py-4 sm:py-8">
+        {events.map((event, index) => {
+          const isExpanded = expandedEvents.has(event.id);
+          return (
+            <div key={event.id} className="flex gap-2 sm:gap-4 animate-slide-up" style={{ animationDelay: `${index * 0.1}s` }}>
+              <div className="flex flex-col items-center">
+                <div className="event-date">
+                  {event.date}
+                </div>
+                <div className="w-px grow bg-border/50 mx-auto rounded-full" />
+                {index < events.length - 1 && (
+                  <div className="w-2 h-2 sm:w-3 sm:h-3 rounded-full bg-amber-400 animate-pulse" />
+                )}
+              </div>
+              <div className="flex-1 pb-3 sm:pb-4">
+                <Card className="event-card">
+                  <CardHeader className="p-3 sm:p-6">
+                    <CardTitle className="text-base sm:text-lg">{event.title}</CardTitle>
+                    {event.source && (
+                      <CardDescription className="text-xs mt-1">
+                        来源: {event.sourceUrl ? (
+                          <a
+                            href={event.sourceUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="hover:underline text-blue-500 dark:text-blue-400"
+                          >
+                            {event.source}
+                          </a>
+                        ) : event.source}
+                      </CardDescription>
+                    )}
+                    {renderPeople(event.people)}
+                  </CardHeader>
+                  <CardContent className="p-3 sm:p-6 pt-0 sm:pt-0">
+                    <p className={`text-sm sm:text-base ${isExpanded ? '' : 'line-clamp-3'}`}>
+                      {event.description}
+                    </p>
+                  </CardContent>
+                  <CardFooter className="p-3 sm:p-6 pt-0 sm:pt-0 flex justify-between">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => toggleExpand(event.id)}
+                      className="text-xs sm:text-sm rounded-full"
+                    >
+                      {isExpanded ? '收起' : '展开'}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleShowDetails(event)}
+                      className="text-xs sm:text-sm rounded-full"
+                    >
+                      AI分析
+                    </Button>
+                  </CardFooter>
+                </Card>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <Dialog open={showDetails} onOpenChange={setShowDetails}>
+        <DialogContent className="max-w-md sm:max-w-2xl p-4 sm:p-6 glass-card rounded-xl">
+          <DialogHeader>
+            <DialogTitle className="text-base sm:text-lg">{selectedEvent?.title}</DialogTitle>
+            <DialogDescription className="text-xs sm:text-sm">
+              {selectedEvent?.date}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="mt-2 sm:mt-4 max-h-[60vh] overflow-y-auto">
+            {!isLoadingDetails || (isStreamingDetails && detailsContent) ? (
+              <div className="relative">
+                {renderMarkdown(detailsContent)}
+                {isStreamingDetails && (
+                  <div className="stream-cursor"></div>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <Skeleton className="h-3 sm:h-4 w-full rounded-md" />
+                <Skeleton className="h-3 sm:h-4 w-full rounded-md" />
+                <Skeleton className="h-3 sm:h-4 w-5/6 rounded-md" />
+                <Skeleton className="h-3 sm:h-4 w-4/5 rounded-md" />
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* 流式光标样式 */}
+      <style jsx global>{`
+        .stream-cursor {
+          display: inline-block;
+          width: 1ch;
+          height: 1.15em;
+          vertical-align: bottom;
+          background: none;
+          color: inherit;
+          font-weight: bold;
+          animation: stream-cursor-blink 1s steps(1) infinite;
+          font-size: 1.3em;
+          line-height: 1;
+        }
+        .stream-cursor::after {
+          content: "▌";
+          display: inline-block;
+        }
+        @keyframes stream-cursor-blink {
+          0% { opacity: 1; }
+          49% { opacity: 1; }
+          50% { opacity: 0; }
+          100% { opacity: 0; }
+        }
+      `}</style>
+    </div>
+  );
+}
+>>>>>>> upstream/main

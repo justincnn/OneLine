@@ -15,10 +15,16 @@ import {
   SelectValue
 } from '@/components/ui/select';
 import type { TimelineData, TimelineEvent, DateFilterOption, DateFilterConfig } from '@/types';
+<<<<<<< HEAD
 import { fetchTimelineData, fetchEventDetails, type ProgressCallback, type TimelineEventCallback, type SummaryCallback, type EventDetailsChunkCallback } from '@/lib/api';
+=======
+import { fetchTimelineData, fetchEventDetails, type ProgressCallback, type StreamCallback } from '@/lib/api';
+>>>>>>> upstream/main
 import { SearchProgress, type SearchProgressStep } from '@/components/SearchProgress';
+import { BaiduHotList } from '@/components/BaiduHotList';
+import { HotSearchDropdown } from '@/components/HotSearchDropdown';
 import { toast } from 'sonner';
-import { Settings, SortDesc, SortAsc, Download, Search, ChevronDown } from 'lucide-react';
+import { Settings, SortDesc, SortAsc, Download, Search, ChevronDown, Flame } from 'lucide-react';
 
 function MainContent() {
   const { apiConfig, isConfigured, isPasswordProtected, isPasswordValidated, streamingPreference } = useApi();
@@ -39,18 +45,29 @@ function MainContent() {
   const [timelineVisible, setTimelineVisible] = useState(false);
   const searchRef = useRef<HTMLFormElement>(null);
   const timelineRef = useRef<HTMLDivElement>(null);
+<<<<<<< HEAD
   const timelineComponentRef = useRef<any>(null);
+=======
+  const inputRef = useRef<HTMLInputElement>(null);
+>>>>>>> upstream/main
 
   // 新增进度状态
   const [searchProgressVisible, setSearchProgressVisible] = useState(false);
   const [searchProgressSteps, setSearchProgressSteps] = useState<SearchProgressStep[]>([]);
   const [searchProgressActive, setSearchProgressActive] = useState(false);
 
+<<<<<<< HEAD
   // 新增流式输出相关状态
   const [streamingEvents, setStreamingEvents] = useState<TimelineEvent[]>([]);
   const [streamingSummary, setStreamingSummary] = useState<string>('');
   const [isStreamingDetails, setIsStreamingDetails] = useState(false);
   const [currentStreamingContent, setCurrentStreamingContent] = useState('');
+=======
+  // 热搜状态
+  const [showHotList, setShowHotList] = useState(false); // 保留原有热搜弹窗
+  const [showHotSearch, setShowHotSearch] = useState(true); // 搜索框下方热搜下拉
+  const [flyingHotItem, setFlyingHotItem] = useState<{ title: string, startX: number, startY: number } | null>(null);
+>>>>>>> upstream/main
 
   // 进度回调函数
   const progressCallback: ProgressCallback = (message, status) => {
@@ -63,14 +80,14 @@ function MainContent() {
 
     setSearchProgressSteps(prev => [...prev, newStep]);
 
-    // 如果是错误或完成状态，不再激活
     if (status !== 'pending') {
-      // 但只更新这一步的状态，不改变整体进度条的激活状态
+      // 结束或错误时不再激活
     } else {
       setSearchProgressActive(true);
     }
   };
 
+<<<<<<< HEAD
   // 事件流式接收回调，考虑用户偏好
   const eventReceivedCallback: TimelineEventCallback = useCallback((event) => {
     // 只有在用户启用流式输出时才处理流式事件
@@ -105,11 +122,13 @@ function MainContent() {
   }, [streamingPreference]);
 
   // 处理滚动到时间轴
+=======
+>>>>>>> upstream/main
   const scrollToTimeline = () => {
     if (timelineRef.current) {
       const header = document.querySelector('header');
       const headerHeight = header?.offsetHeight || 0;
-      const yOffset = -headerHeight - 20; // 额外空间
+      const yOffset = -headerHeight - 20;
       const y = timelineRef.current.getBoundingClientRect().top + window.scrollY + yOffset;
 
       window.scrollTo({
@@ -119,7 +138,40 @@ function MainContent() {
     }
   };
 
-  // Effect to show/hide the floating button when scrolling
+  // 热搜点击（兼容飞行动画）
+  const handleHotItemClick = (title: string) => {
+    // 获取热搜项的位置
+    const hotItems = document.querySelectorAll('.hot-item');
+    let startX = 0;
+    let startY = 0;
+
+    hotItems.forEach((item) => {
+      if (item.textContent?.includes(title)) {
+        const rect = item.getBoundingClientRect();
+        startX = rect.left + rect.width / 2;
+        startY = rect.top + rect.height / 2;
+      }
+    });
+
+    setFlyingHotItem({ title, startX, startY });
+
+    setTimeout(() => {
+      setQuery(title);
+      setShowHotList(false);
+      setFlyingHotItem(null);
+      setShowHotSearch(false); // 隐藏下拉热搜
+
+      setTimeout(() => {
+        if (inputRef.current) {
+          const form = inputRef.current.form;
+          if (form) {
+            form.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+          }
+        }
+      }, 300);
+    }, 600);
+  };
+
   useEffect(() => {
     const handleScroll = () => {
       if (window.scrollY > 150) {
@@ -133,6 +185,7 @@ function MainContent() {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
+<<<<<<< HEAD
   // 当流式事件更新时，更新过滤后的事件列表
   useEffect(() => {
     if (streamingEvents.length > 0) {
@@ -141,6 +194,8 @@ function MainContent() {
   }, [streamingEvents, dateFilter, sortDirection]);
 
   // Effect to filter events based on date filter
+=======
+>>>>>>> upstream/main
   useEffect(() => {
     if (timelineData.events.length === 0 && streamingEvents.length === 0) {
       setFilteredEvents([]);
@@ -177,13 +232,21 @@ function MainContent() {
         startDate = dateFilter.startDate;
         break;
       default:
+<<<<<<< HEAD
         setFilteredEvents(sortEvents(events));
+=======
+        setFilteredEvents(sortEvents(timelineData.events));
+>>>>>>> upstream/main
         return;
     }
 
     const endDate = dateFilter.option === 'custom' ? dateFilter.endDate : undefined;
 
+<<<<<<< HEAD
     const filtered = events.filter(event => {
+=======
+    const filtered = timelineData.events.filter(event => {
+>>>>>>> upstream/main
       const dateParts = event.date.split('-').map(Number);
       let eventDate: Date;
 
@@ -203,14 +266,40 @@ function MainContent() {
       if (endDate && eventDate > endDate) {
         return false;
       }
-
       return true;
     });
 
     setFilteredEvents(sortEvents(filtered));
   };
 
-  // Function to sort events based on sort direction
+  useEffect(() => {
+    if (flyingHotItem && inputRef.current) {
+      const inputRect = inputRef.current.getBoundingClientRect();
+      const inputCenterX = inputRect.left + inputRect.width / 2;
+      const inputCenterY = inputRect.top + inputRect.height / 2;
+
+      const flyX = inputCenterX - flyingHotItem.startX;
+      const flyY = inputCenterY - flyingHotItem.startY;
+
+      document.documentElement.style.setProperty('--fly-x', `${flyX}px`);
+      document.documentElement.style.setProperty('--fly-y', `${flyY}px`);
+    }
+  }, [flyingHotItem]);
+
+  // 自动显示热搜下拉（仅在搜索框为空且聚焦时）
+  useEffect(() => {
+    if (!query.trim()) {
+      setShowHotSearch(true);
+    }
+  }, [query]);
+
+  // 新增逻辑：只要query有内容就隐藏热搜
+  useEffect(() => {
+    if (query.trim()) {
+      setShowHotSearch(false);
+    }
+  }, [query]);
+
   const sortEvents = (events: TimelineEvent[]): TimelineEvent[] => {
     return [...events].sort((a, b) => {
       const dateA = a.date.replace(/\D/g, '');
@@ -221,7 +310,6 @@ function MainContent() {
     });
   };
 
-  // Toggle sort direction
   const toggleSortDirection = () => {
     setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
   };
@@ -246,8 +334,16 @@ function MainContent() {
       return;
     }
 
+<<<<<<< HEAD
     setStreamingEvents([]);
     setStreamingSummary('');
+=======
+    // 隐藏热搜榜
+    setShowHotList(false);
+    setShowHotSearch(false);  // 确保搜索时隐藏热搜列表
+
+    // 重置进度显示
+>>>>>>> upstream/main
     setSearchProgressSteps([]);
     setSearchProgressActive(true);
     setSearchProgressVisible(true);
@@ -303,6 +399,7 @@ function MainContent() {
         queryWithDateFilter += dateRangeText;
       }
 
+<<<<<<< HEAD
       // 使用流式回调获取数据，根据用户偏好决定是否传递回调
       const data = await fetchTimelineData(
         queryWithDateFilter,
@@ -328,6 +425,30 @@ function MainContent() {
       }, 3000);
 
       if (data.events.length === 0 && streamingEvents.length === 0) {
+=======
+      const streamCallback: StreamCallback = (chunk, isDone) => {
+        console.log('收到流式数据块:', chunk.substring(0, 50) + (chunk.length > 50 ? '...' : ''));
+      };
+
+      const data = await fetchTimelineData(queryWithDateFilter, apiConfig, progressCallback, streamCallback);
+      setTimelineData(data);
+
+      setTimeout(() => {
+        setTimelineVisible(true);
+        if (data.events.length > 0) {
+          setTimeout(scrollToTimeline, 300);
+        }
+
+        setSearchProgressActive(false);
+
+        setTimeout(() => {
+          setSearchProgressVisible(false);
+        }, 3000);
+
+      }, 300);
+
+      if (data.events.length === 0) {
+>>>>>>> upstream/main
         toast.warning('未找到相关事件，请尝试其他关键词');
       }
     } catch (err: unknown) {
@@ -342,7 +463,6 @@ function MainContent() {
     }
   };
 
-  // Format date for API query
   const formatDate = (date: Date | undefined): string => {
     if (!date) return '';
     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
@@ -380,8 +500,12 @@ function MainContent() {
     }
   };
 
+<<<<<<< HEAD
   // 更新handleRequestDetails，使用用户的流式输出偏好
   const handleRequestDetails = async (event: TimelineEvent): Promise<string> => {
+=======
+  const handleRequestDetails = async (event: TimelineEvent, streamCallback?: StreamCallback): Promise<string> => {
+>>>>>>> upstream/main
     if (!isConfigured) {
       toast.info('请先配置API设置');
       setShowSettings(true);
@@ -409,6 +533,7 @@ function MainContent() {
         detailedQuery,
         apiConfig,
         progressCallback,
+<<<<<<< HEAD
         streamingPreference ? detailsChunkCallback : undefined
       );
 
@@ -420,6 +545,11 @@ function MainContent() {
         setCurrentStreamingContent(detailsContent);
       }
 
+=======
+        streamCallback
+      );
+
+>>>>>>> upstream/main
       setTimeout(() => {
         setSearchProgressVisible(false);
         setSearchProgressActive(false);
@@ -439,7 +569,6 @@ function MainContent() {
     }
   };
 
-  // Function to export timeline as image
   const exportAsImage = () => {
     if (filteredEvents.length === 0) {
       toast.warning('没有可导出的内容');
@@ -479,6 +608,11 @@ function MainContent() {
     });
   };
 
+  // 保留弹窗热搜榜切换函数（兼容旧逻辑）
+  const toggleHotList = () => {
+    setShowHotList(prev => !prev);
+  };
+
   return (
     <main className="flex min-h-screen flex-col relative">
       <div className="bg-gradient-purple" />
@@ -515,14 +649,18 @@ function MainContent() {
         <div className="p-4 w-full">
           <div className="glass-card rounded-full overflow-hidden flex items-center p-1 pr-2">
             <Input
+              ref={inputRef}
               type="text"
               placeholder="输入关键词，如：俄乌冲突、中美贸易..."
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               className="flex-1 border-0 bg-transparent focus-visible:ring-0 placeholder:text-muted-foreground/70"
+              onFocus={() => { if (!query.trim()) setShowHotSearch(true); }}
+              // 取消onBlur事件，避免用户无法点击热搜项
             />
 
             <div className="flex items-center">
+              {/* 移除热搜榜按钮，热搜自动显示在下方 */}
               <Select
                 value={dateFilter.option}
                 onValueChange={handleDateFilterChange as (value: string) => void}
@@ -587,9 +725,42 @@ function MainContent() {
               </div>
             </div>
           )}
+
+          {/* 热搜下拉列表 - 在搜索框下方显示 */}
+          <div className="w-full max-w-3xl mx-auto relative z-30">
+            <HotSearchDropdown
+              visible={searchPosition === 'center' && showHotSearch && !isLoading}
+              onSelectHotItem={handleHotItemClick}
+            />
+          </div>
         </div>
       </form>
 
+<<<<<<< HEAD
+=======
+      {/* 保留原来的百度热搜榜弹窗，以便保留兼容性 */}
+      <BaiduHotList
+        visible={showHotList}
+        onClose={() => setShowHotList(false)}
+        onSelectHotItem={handleHotItemClick}
+      />
+
+      {/* 飞行热搜项 */}
+      {flyingHotItem && (
+        <div
+          className="fixed z-50 fly-to-input bg-primary text-primary-foreground px-3 py-1.5 rounded-full text-sm font-medium"
+          style={{
+            left: flyingHotItem.startX,
+            top: flyingHotItem.startY,
+            transform: 'translate(-50%, -50%)'
+          }}
+        >
+          {flyingHotItem.title}
+        </div>
+      )}
+
+      {/* 搜索进度显示 */}
+>>>>>>> upstream/main
       <div className={`w-full max-w-3xl mx-auto px-4 transition-opacity duration-300 ${searchProgressVisible ? 'opacity-100' : 'opacity-0'}`}
            style={{marginTop: searchPosition === 'center' ? "calc(50vh + 180px)" : "80px", zIndex: 15}}>
         <SearchProgress
