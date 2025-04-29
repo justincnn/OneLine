@@ -72,12 +72,8 @@ export async function POST(request: Request) {
     const payload = {
       ...requestData,
       model,
-<<<<<<< HEAD
-      stream // 添加流式输出参数
-=======
       // 如果客户端请求流式输出，确保在API请求中启用
       stream: streamMode
->>>>>>> upstream/main
     };
 
     // 构建请求头
@@ -90,7 +86,6 @@ export async function POST(request: Request) {
       endpoint: finalEndpoint,
       model: model,
       usingEnvConfig: isUsingEnvConfig,
-<<<<<<< HEAD
       stream: stream,
       apiKeyConfigured: finalApiKey ? '已配置' : '未配置'
     });
@@ -109,81 +104,6 @@ export async function POST(request: Request) {
                 headers,
                 body: JSON.stringify(payload)
               });
-=======
-      apiKeyConfigured: finalApiKey ? '已配置' : '未配置',
-      streamMode: streamMode ? '已启用' : '未启用'
-    });
-
-    // 如果启用了流式模式，使用流式响应
-    if (streamMode) {
-      try {
-        // 创建一个TransformStream来处理API响应
-        const { readable, writable } = new TransformStream();
-        const writer = writable.getWriter();
-
-        // 发送请求到API端点，使用stream响应模式
-        const apiResponse = await fetch(finalEndpoint, {
-          method: 'POST',
-          headers,
-          body: JSON.stringify(payload)
-        });
-
-        if (!apiResponse.ok) {
-          const errorText = await apiResponse.text();
-          throw new Error(`API responded with status ${apiResponse.status}: ${errorText}`);
-        }
-
-        if (!apiResponse.body) {
-          throw new Error('API response body is null');
-        }
-
-        // 处理API响应流
-        const reader = apiResponse.body.getReader();
-
-        // 开始处理流数据
-        (async () => {
-          try {
-            while (true) {
-              const { done, value } = await reader.read();
-              if (done) {
-                await writer.close();
-                break;
-              }
-
-              // 将数据块直接传递给客户端
-              await writer.write(value);
-            }
-          } catch (e) {
-            console.error('Error processing stream:', e);
-            // 写入错误消息到流
-            const encoder = new TextEncoder();
-            await writer.write(encoder.encode(`event: error\ndata: ${JSON.stringify({ error: e.message })}\n\n`));
-            await writer.close();
-          }
-        })();
-
-        // 返回流式响应
-        return createStreamResponse(readable);
-      } catch (error) {
-        console.error('Stream API request failed:', error);
-        // 如果流式请求失败，回退到常规响应
-        return NextResponse.json(
-          { error: 'Stream request failed', message: error.message },
-          { status: 500 }
-        );
-      }
-    }
-
-    // 非流式模式下的原始实现（保留原来的重试逻辑）
-    let lastError;
-    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-      try {
-        // 发送请求到实际的 API 端点，使用较短的超时设置
-        const response = await axios.post(finalEndpoint, payload, {
-          headers,
-          timeout: TIMEOUT_MS
-        });
->>>>>>> upstream/main
 
               if (!response.ok) {
                 throw new Error(`API returned ${response.status}: ${await response.text()}`);

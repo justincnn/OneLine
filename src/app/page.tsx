@@ -15,11 +15,7 @@ import {
   SelectValue
 } from '@/components/ui/select';
 import type { TimelineData, TimelineEvent, DateFilterOption, DateFilterConfig } from '@/types';
-<<<<<<< HEAD
-import { fetchTimelineData, fetchEventDetails, type ProgressCallback, type TimelineEventCallback, type SummaryCallback, type EventDetailsChunkCallback } from '@/lib/api';
-=======
 import { fetchTimelineData, fetchEventDetails, type ProgressCallback, type StreamCallback } from '@/lib/api';
->>>>>>> upstream/main
 import { SearchProgress, type SearchProgressStep } from '@/components/SearchProgress';
 import { BaiduHotList } from '@/components/BaiduHotList';
 import { HotSearchDropdown } from '@/components/HotSearchDropdown';
@@ -45,131 +41,357 @@ function MainContent() {
   const [timelineVisible, setTimelineVisible] = useState(false);
   const searchRef = useRef<HTMLFormElement>(null);
   const timelineRef = useRef<HTMLDivElement>(null);
-<<<<<<< HEAD
-  const timelineComponentRef = useRef<any>(null);
-=======
   const inputRef = useRef<HTMLInputElement>(null);
->>>>>>> upstream/main
 
   // 新增进度状态
   const [searchProgressVisible, setSearchProgressVisible] = useState(false);
   const [searchProgressSteps, setSearchProgressSteps] = useState<SearchProgressStep[]>([]);
   const [searchProgressActive, setSearchProgressActive] = useState(false);
 
-<<<<<<< HEAD
+  // 热搜状态
+  const [showHotList, setShowHotList] = useState(false); // 保留原有热搜弹窗
+  const [showHotSearch, setShowHotSearch] = useState(true); // 搜索框下方热搜下拉
+  const [flyingHotItem, setFlyingHotItem] = useState<{ title: string, startX: number, startY: number } | null>(null);
+
   // 新增流式输出相关状态
   const [streamingEvents, setStreamingEvents] = useState<TimelineEvent[]>([]);
   const [streamingSummary, setStreamingSummary] = useState<string>('');
   const [isStreamingDetails, setIsStreamingDetails] = useState(false);
   const [currentStreamingContent, setCurrentStreamingContent] = useState('');
-=======
-  // 热搜状态
-  const [showHotList, setShowHotList] = useState(false); // 保留原有热搜弹窗
-  const [showHotSearch, setShowHotSearch] = useState(true); // 搜索框下方热搜下拉
-  const [flyingHotItem, setFlyingHotItem] = useState<{ title: string, startX: number, startY: number } | null>(null);
->>>>>>> upstream/main
 
   // 进度回调函数
   const progressCallback: ProgressCallback = (message, status) => {
-    const newStep: SearchProgressStep = {
-      id: `step-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
-      message,
-      status,
-      timestamp: new Date()
-    };
-
-    setSearchProgressSteps(prev => [...prev, newStep]);
-
-    if (status !== 'pending') {
-      // 结束或错误时不再激活
-    } else {
+    if (status === 'start') {
+      // 开始新流程时重置进度
+      setSearchProgressSteps([{ message, status: 'loading' }]);
+      setSearchProgressVisible(true);
       setSearchProgressActive(true);
+    } else {
+      setSearchProgressSteps(prev => {
+        // 更新最后一个步骤的状态
+        const updatedSteps = [...prev];
+        if (updatedSteps.length > 0) {
+          const lastIndex = updatedSteps.length - 1;
+          updatedSteps[lastIndex] = { ...updatedSteps[lastIndex], status };
+        }
+
+        // 如果是新消息且不是结束状态，添加新步骤
+        if (message && status !== 'error' && status !== 'complete') {
+          updatedSteps.push({ message, status: 'loading' });
+        }
+
+        return updatedSteps;
+      });
+
+      if (status === 'complete' || status === 'error') {
+        setSearchProgressActive(false);
+      }
     }
   };
 
-<<<<<<< HEAD
+  // 流式输出回调
+  const streamCallback: StreamCallback = useCallback((type, content) => {
+    if (type === 'event') {
+      try {
+        const event = JSON.parse(content);
+        setStreamingEvents(prev => [...prev, event]);
+      } catch (error) {
+        console.error('解析事件数据失败', error);
+      }
+    } else if (type === 'summary') {
+      setStreamingSummary(prev => prev + content);
+    } else if (type === 'details') {
+      if (!isStreamingDetails) {
+        setIsStreamingDetails(true);
+        setCurrentStreamingContent('');
+      }
+      setCurrentStreamingContent(prev => prev + content);
+    }
+  }, [isStreamingDetails]);
+
   // 事件流式接收回调，考虑用户偏好
-  const eventReceivedCallback: TimelineEventCallback = useCallback((event) => {
+  const handleStreamedEvents = useCallback((events: TimelineEvent[]) => {
     // 只有在用户启用流式输出时才处理流式事件
-    if (streamingPreference) {
-      setStreamingEvents(prev => {
-        const exists = prev.some(e => e.id === event.id || (e.title === event.title && e.date === event.date));
-        if (exists) return prev;
-        const newEvents = [...prev, event];
-        return sortEvents(newEvents);
+    if (streamingPreference && events.length > 0) {
+      // 将事件合并到时间轴数据中
+      setTimelineData(prev => {
+        // 防止重复
+        const existingIds = new Set(prev.events.map(e => e.id));
+        const newEvents = events.filter(e => !existingIds.has(e.id));
+        
+        if (newEvents.length === 0) return prev;
+        
+        return {
+          ...prev,
+          events: [...prev.events, ...newEvents]
+        };
       });
     }
   }, [streamingPreference]);
 
-  // 总结流式接收回调，考虑用户偏好
-  const summaryReceivedCallback: SummaryCallback = useCallback((summary) => {
-    if (streamingPreference) {
-      setStreamingSummary(summary);
+  // 当流式事件更新时处理
+  useEffect(() => {
+    if (streamingEvents.length > 0) {
+      handleStreamedEvents(streamingEvents);
     }
-  }, [streamingPreference]);
+  }, [streamingEvents, handleStreamedEvents]);
 
-  // 事件详情流式接收回调，考虑用户偏好
-  const detailsChunkCallback: EventDetailsChunkCallback = useCallback((chunk) => {
-    if (streamingPreference) {
-      setCurrentStreamingContent(prev => {
-        const newContent = prev + chunk;
-        if (timelineComponentRef.current) {
-          timelineComponentRef.current.updateDetailsContent(newContent);
-        }
-        return newContent;
-      });
+  // 流式摘要更新处理
+  useEffect(() => {
+    if (streamingSummary && streamingPreference) {
+      setTimelineData(prev => ({
+        ...prev,
+        summary: streamingSummary
+      }));
     }
-  }, [streamingPreference]);
+  }, [streamingSummary, streamingPreference]);
+
+  // 流式详情更新处理
+  useEffect(() => {
+    if (isStreamingDetails && currentStreamingContent && streamingPreference) {
+      setCurrentStreamingContent(currentStreamingContent);
+    }
+  }, [currentStreamingContent, isStreamingDetails, streamingPreference]);
 
   // 处理滚动到时间轴
-=======
->>>>>>> upstream/main
   const scrollToTimeline = () => {
     if (timelineRef.current) {
       const header = document.querySelector('header');
-      const headerHeight = header?.offsetHeight || 0;
-      const yOffset = -headerHeight - 20;
-      const y = timelineRef.current.getBoundingClientRect().top + window.scrollY + yOffset;
+      const headerHeight = header ? header.offsetHeight : 0;
+      const rect = timelineRef.current.getBoundingClientRect();
+      const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+      const targetPosition = rect.top + scrollTop - headerHeight - 20;
 
       window.scrollTo({
-        top: y,
+        top: targetPosition,
         behavior: 'smooth'
       });
     }
   };
 
-  // 热搜点击（兼容飞行动画）
-  const handleHotItemClick = (title: string) => {
-    // 获取热搜项的位置
-    const hotItems = document.querySelectorAll('.hot-item');
-    let startX = 0;
-    let startY = 0;
+  // 处理搜索提交
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    const query = formData.get('query') as string;
 
-    hotItems.forEach((item) => {
-      if (item.textContent?.includes(title)) {
-        const rect = item.getBoundingClientRect();
-        startX = rect.left + rect.width / 2;
-        startY = rect.top + rect.height / 2;
+    if (!query.trim()) return;
+
+    // 重置状态
+    setIsLoading(true);
+    setTimelineData({ events: [] });
+    setFilteredEvents([]);
+    setStreamingEvents([]);
+    setStreamingSummary('');
+    setIsStreamingDetails(false);
+    setCurrentStreamingContent('');
+
+    try {
+      const data = await fetchTimelineData(query, progressCallback, streamingPreference ? streamCallback : undefined);
+      
+      // 如果没有使用流式输出或者流式输出没有提供足够的数据，使用返回的数据
+      if (!streamingPreference || streamingEvents.length === 0) {
+        setTimelineData(data);
       }
+
+      // 设置时间轴可见
+      setTimelineVisible(true);
+      setTimeout(scrollToTimeline, 100);
+    } catch (error) {
+      console.error('获取时间轴数据失败:', error);
+      progressCallback('获取数据失败，请重试', 'error');
+    } finally {
+      setIsLoading(false);
+      // 在结束搜索后，过一段时间隐藏进度
+      setTimeout(() => {
+        setSearchProgressVisible(false);
+      }, 3000);
+    }
+  };
+
+  // 处理查看事件详情
+  const handleViewEventDetails = async (eventId: string) => {
+    if (!eventId || streamingEvents.some(e => e.id === eventId) && currentStreamingContent) return;
+
+    try {
+      // 从当前事件列表中查找事件详情
+      const event = [...timelineData.events, ...streamingEvents].find(e => e.id === eventId);
+      if (!event) throw new Error('找不到事件信息');
+
+      // 获取详细信息
+      const details = await fetchEventDetails(
+        event.id,
+        event, 
+        progressCallback,
+        streamingPreference ? streamCallback : undefined
+      );
+
+      // 如果没有使用流式输出，使用返回的数据
+      if (!streamingPreference || !isStreamingDetails) {
+        setCurrentStreamingContent(details);
+      }
+    } catch (error) {
+      console.error('获取事件详情失败:', error);
+      setCurrentStreamingContent('获取事件详情失败，请重试');
+    }
+  };
+
+  // 监听滚动以适应固定标题
+  useEffect(() => {
+    const handleScroll = () => {
+      if (timelineRef.current) {
+        const rect = timelineRef.current.getBoundingClientRect();
+        const shouldFix = rect.top <= 60;
+        timelineRef.current.classList.toggle('timeline-scrolled', shouldFix);
+      }
+    };
+
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  // 筛选事件的逻辑
+  useEffect(() => {
+    // 合并常规事件和流式事件（如果有）
+    const allEvents = [
+      ...timelineData.events,
+      ...(streamingPreference ? streamingEvents : [])
+    ];
+
+    // 如果没有事件，清空筛选结果
+    if (allEvents.length === 0) {
+      setFilteredEvents([]);
+      return;
+    }
+
+    // 辅助函数：按方向排序事件
+    const sortEvents = (events: TimelineEvent[]) => {
+      return [...events].sort((a, b) => {
+        const dateA = new Date(a.date.replace(/-/g, '/'));
+        const dateB = new Date(b.date.replace(/-/g, '/'));
+        return sortDirection === 'asc' ? dateA.getTime() - dateB.getTime() : dateB.getTime() - dateA.getTime();
+      });
+    };
+
+    // 如果是"全部"选项，直接返回排序后的事件
+    if (dateFilter.option === 'all') {
+      setFilteredEvents(sortEvents(allEvents));
+      return;
+    }
+
+    // 确定筛选的起始日期
+    let startDate: Date | undefined;
+    switch (dateFilter.option) {
+      case 'last7days':
+        startDate = new Date();
+        startDate.setDate(startDate.getDate() - 7);
+        break;
+      case 'last30days':
+        startDate = new Date();
+        startDate.setDate(startDate.getDate() - 30);
+        break;
+      case 'last90days':
+        startDate = new Date();
+        startDate.setDate(startDate.getDate() - 90);
+        break;
+      case 'custom':
+        startDate = dateFilter.startDate ? new Date(dateFilter.startDate.replace(/-/g, '/')) : undefined;
+        break;
+      default:
+        setFilteredEvents(sortEvents(allEvents));
+        return;
+    }
+
+    const endDate = dateFilter.option === 'custom' ? dateFilter.endDate : undefined;
+
+    const filtered = allEvents.filter(event => {
+      const dateParts = event.date.split('-').map(Number);
+      let eventDate: Date;
+      
+      // 根据日期格式创建Date对象
+      if (dateParts.length === 3) {
+        // 完整日期: YYYY-MM-DD
+        eventDate = new Date(dateParts[0], dateParts[1] - 1, dateParts[2]);
+      } else if (dateParts.length === 2) {
+        // 只有年月: YYYY-MM
+        eventDate = new Date(dateParts[0], dateParts[1] - 1, 1);
+      } else {
+        // 只有年份: YYYY
+        eventDate = new Date(dateParts[0], 0, 1);
+      }
+
+      // 检查是否在起始日期之后
+      if (startDate && eventDate < startDate) {
+        return false;
+      }
+
+      // 检查是否在结束日期之前
+      if (endDate) {
+        const endDateObj = new Date(endDate.replace(/-/g, '/'));
+        if (eventDate > endDateObj) {
+          return false;
+        }
+      }
+
+      return true;
     });
 
-    setFlyingHotItem({ title, startX, startY });
+    setFilteredEvents(sortEvents(filtered));
+  }, [timelineData.events, streamingEvents, dateFilter, sortDirection, streamingPreference]);
 
-    setTimeout(() => {
-      setQuery(title);
-      setShowHotList(false);
-      setFlyingHotItem(null);
-      setShowHotSearch(false); // 隐藏下拉热搜
+  // 热搜飞行动画效果
+  useEffect(() => {
+    if (flyingHotItem && inputRef.current) {
+      // 获取输入框的位置
+      const inputRect = inputRef.current.getBoundingClientRect();
+      const targetX = inputRect.left + inputRect.width / 2;
+      const targetY = inputRect.top + inputRect.height / 2;
 
+      // 创建飞行元素
+      const flyingEl = document.createElement('div');
+      flyingEl.className = 'flying-hot-item';
+      flyingEl.textContent = flyingHotItem.title;
+      flyingEl.style.position = 'fixed';
+      flyingEl.style.left = `${flyingHotItem.startX}px`;
+      flyingEl.style.top = `${flyingHotItem.startY}px`;
+      flyingEl.style.background = 'rgba(255, 99, 71, 0.8)';
+      flyingEl.style.color = 'white';
+      flyingEl.style.padding = '4px 8px';
+      flyingEl.style.borderRadius = '4px';
+      flyingEl.style.zIndex = '1000';
+      flyingEl.style.pointerEvents = 'none';
+      flyingEl.style.transition = 'all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275)';
+      
+      document.body.appendChild(flyingEl);
+
+      // 开始动画
       setTimeout(() => {
+        flyingEl.style.transform = 'scale(0.8)';
+        flyingEl.style.left = `${targetX}px`;
+        flyingEl.style.top = `${targetY}px`;
+        flyingEl.style.opacity = '0.8';
+      }, 10);
+
+      // 动画结束后处理
+      setTimeout(() => {
+        document.body.removeChild(flyingEl);
         if (inputRef.current) {
-          const form = inputRef.current.form;
-          if (form) {
-            form.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
-          }
+          inputRef.current.value = flyingHotItem.title;
+          inputRef.current.focus();
         }
-      }, 300);
-    }, 600);
+        setFlyingHotItem(null);
+      }, 500);
+    }
+  }, [flyingHotItem]);
+
+  // 处理热搜点击
+  const handleHotItemClick = (title: string, event: React.MouseEvent) => {
+    // 记录点击位置
+    setFlyingHotItem({
+      title,
+      startX: event.clientX,
+      startY: event.clientY
+    });
   };
 
   useEffect(() => {
@@ -185,121 +407,6 @@ function MainContent() {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-<<<<<<< HEAD
-  // 当流式事件更新时，更新过滤后的事件列表
-  useEffect(() => {
-    if (streamingEvents.length > 0) {
-      filterAndSortEvents(streamingEvents);
-    }
-  }, [streamingEvents, dateFilter, sortDirection]);
-
-  // Effect to filter events based on date filter
-=======
->>>>>>> upstream/main
-  useEffect(() => {
-    if (timelineData.events.length === 0 && streamingEvents.length === 0) {
-      setFilteredEvents([]);
-      return;
-    }
-    const events = timelineData.events.length > 0 ? timelineData.events : streamingEvents;
-    filterAndSortEvents(events);
-  }, [timelineData.events, dateFilter, sortDirection]);
-
-  // 过滤并排序事件
-  const filterAndSortEvents = (events: TimelineEvent[]) => {
-    if (events.length === 0) {
-      setFilteredEvents([]);
-      return;
-    }
-
-    const now = new Date();
-    let startDate: Date | undefined;
-
-    switch (dateFilter.option) {
-      case 'month':
-        startDate = new Date(now);
-        startDate.setMonth(now.getMonth() - 1);
-        break;
-      case 'halfYear':
-        startDate = new Date(now);
-        startDate.setMonth(now.getMonth() - 6);
-        break;
-      case 'year':
-        startDate = new Date(now);
-        startDate.setFullYear(now.getFullYear() - 1);
-        break;
-      case 'custom':
-        startDate = dateFilter.startDate;
-        break;
-      default:
-<<<<<<< HEAD
-        setFilteredEvents(sortEvents(events));
-=======
-        setFilteredEvents(sortEvents(timelineData.events));
->>>>>>> upstream/main
-        return;
-    }
-
-    const endDate = dateFilter.option === 'custom' ? dateFilter.endDate : undefined;
-
-<<<<<<< HEAD
-    const filtered = events.filter(event => {
-=======
-    const filtered = timelineData.events.filter(event => {
->>>>>>> upstream/main
-      const dateParts = event.date.split('-').map(Number);
-      let eventDate: Date;
-
-      if (dateParts.length === 3) {
-        eventDate = new Date(dateParts[0], dateParts[1] - 1, dateParts[2]);
-      } else if (dateParts.length === 2) {
-        eventDate = new Date(dateParts[0], dateParts[1] - 1, 1);
-      } else if (dateParts.length === 1) {
-        eventDate = new Date(dateParts[0], 0, 1);
-      } else {
-        return true;
-      }
-
-      if (startDate && eventDate < startDate) {
-        return false;
-      }
-      if (endDate && eventDate > endDate) {
-        return false;
-      }
-      return true;
-    });
-
-    setFilteredEvents(sortEvents(filtered));
-  };
-
-  useEffect(() => {
-    if (flyingHotItem && inputRef.current) {
-      const inputRect = inputRef.current.getBoundingClientRect();
-      const inputCenterX = inputRect.left + inputRect.width / 2;
-      const inputCenterY = inputRect.top + inputRect.height / 2;
-
-      const flyX = inputCenterX - flyingHotItem.startX;
-      const flyY = inputCenterY - flyingHotItem.startY;
-
-      document.documentElement.style.setProperty('--fly-x', `${flyX}px`);
-      document.documentElement.style.setProperty('--fly-y', `${flyY}px`);
-    }
-  }, [flyingHotItem]);
-
-  // 自动显示热搜下拉（仅在搜索框为空且聚焦时）
-  useEffect(() => {
-    if (!query.trim()) {
-      setShowHotSearch(true);
-    }
-  }, [query]);
-
-  // 新增逻辑：只要query有内容就隐藏热搜
-  useEffect(() => {
-    if (query.trim()) {
-      setShowHotSearch(false);
-    }
-  }, [query]);
-
   const sortEvents = (events: TimelineEvent[]): TimelineEvent[] => {
     return [...events].sort((a, b) => {
       const dateA = a.date.replace(/\D/g, '');
@@ -312,160 +419,6 @@ function MainContent() {
 
   const toggleSortDirection = () => {
     setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (!query.trim()) {
-      toast.warning('请输入搜索关键词');
-      return;
-    }
-
-    if (!isConfigured) {
-      toast.info('请先配置API设置');
-      setShowSettings(true);
-      return;
-    }
-
-    if (isPasswordProtected && !isPasswordValidated) {
-      toast.info('请先验证访问密码');
-      setShowSettings(true);
-      return;
-    }
-
-<<<<<<< HEAD
-    setStreamingEvents([]);
-    setStreamingSummary('');
-=======
-    // 隐藏热搜榜
-    setShowHotList(false);
-    setShowHotSearch(false);  // 确保搜索时隐藏热搜列表
-
-    // 重置进度显示
->>>>>>> upstream/main
-    setSearchProgressSteps([]);
-    setSearchProgressActive(true);
-    setSearchProgressVisible(true);
-    setError('');
-
-    if (searchPosition === 'center') {
-      setSearchPosition('top');
-      setTimeout(() => {
-        fetchData();
-      }, 700);
-    } else {
-      fetchData();
-    }
-  };
-
-  // 更新fetchData函数，使用用户的流式输出偏好
-  const fetchData = async () => {
-    setIsLoading(true);
-    setError('');
-    setTimelineData({ events: [] });
-    setTimelineVisible(true);
-
-    try {
-      let queryWithDateFilter = query;
-
-      if (dateFilter.option !== 'all') {
-        let dateRangeText = '';
-        const now = new Date();
-
-        switch(dateFilter.option) {
-          case 'month':
-            const monthAgo = new Date(now);
-            monthAgo.setMonth(now.getMonth() - 1);
-            dateRangeText = `，请主要搜索 ${formatDate(monthAgo)} 至 ${formatDate(now)} 这段时间的内容`;
-            break;
-          case 'halfYear':
-            const halfYearAgo = new Date(now);
-            halfYearAgo.setMonth(now.getMonth() - 6);
-            dateRangeText = `，请主要搜索 ${formatDate(halfYearAgo)} 至 ${formatDate(now)} 这段时间的内容`;
-            break;
-          case 'year':
-            const yearAgo = new Date(now);
-            yearAgo.setFullYear(now.getFullYear() - 1);
-            dateRangeText = `，请主要搜索 ${formatDate(yearAgo)} 至 ${formatDate(now)} 这段时间的内容`;
-            break;
-          case 'custom':
-            if (dateFilter.startDate && dateFilter.endDate) {
-              dateRangeText = `，请主要搜索 ${formatDate(dateFilter.startDate)} 至 ${formatDate(dateFilter.endDate)} 这段时间的内容`;
-            }
-            break;
-        }
-
-        queryWithDateFilter += dateRangeText;
-      }
-
-<<<<<<< HEAD
-      // 使用流式回调获取数据，根据用户偏好决定是否传递回调
-      const data = await fetchTimelineData(
-        queryWithDateFilter,
-        apiConfig,
-        progressCallback,
-        streamingPreference ? eventReceivedCallback : undefined,
-        streamingPreference ? summaryReceivedCallback : undefined
-      );
-
-      // 如果没有通过流式获取到事件，或者用户禁用了流式输出，则使用传统方式获取的事件
-      if (streamingEvents.length === 0 || !streamingPreference) {
-        setTimelineData(data);
-      }
-
-      if (data.events.length > 0 || streamingEvents.length > 0) {
-        setTimeout(scrollToTimeline, 300);
-      }
-
-      setSearchProgressActive(false);
-
-      setTimeout(() => {
-        setSearchProgressVisible(false);
-      }, 3000);
-
-      if (data.events.length === 0 && streamingEvents.length === 0) {
-=======
-      const streamCallback: StreamCallback = (chunk, isDone) => {
-        console.log('收到流式数据块:', chunk.substring(0, 50) + (chunk.length > 50 ? '...' : ''));
-      };
-
-      const data = await fetchTimelineData(queryWithDateFilter, apiConfig, progressCallback, streamCallback);
-      setTimelineData(data);
-
-      setTimeout(() => {
-        setTimelineVisible(true);
-        if (data.events.length > 0) {
-          setTimeout(scrollToTimeline, 300);
-        }
-
-        setSearchProgressActive(false);
-
-        setTimeout(() => {
-          setSearchProgressVisible(false);
-        }, 3000);
-
-      }, 300);
-
-      if (data.events.length === 0) {
->>>>>>> upstream/main
-        toast.warning('未找到相关事件，请尝试其他关键词');
-      }
-    } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : '发生错误，请稍后再试';
-      setError(errorMessage);
-      toast.error(errorMessage);
-      console.error('Error fetching timeline data:', err);
-
-      setSearchProgressActive(false);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const formatDate = (date: Date | undefined): string => {
-    if (!date) return '';
-    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
   };
 
   const handleDateFilterChange = (value: DateFilterOption) => {
@@ -500,12 +453,7 @@ function MainContent() {
     }
   };
 
-<<<<<<< HEAD
-  // 更新handleRequestDetails，使用用户的流式输出偏好
-  const handleRequestDetails = async (event: TimelineEvent): Promise<string> => {
-=======
   const handleRequestDetails = async (event: TimelineEvent, streamCallback?: StreamCallback): Promise<string> => {
->>>>>>> upstream/main
     if (!isConfigured) {
       toast.info('请先配置API设置');
       setShowSettings(true);
@@ -526,30 +474,25 @@ function MainContent() {
     setCurrentStreamingContent('');
 
     try {
-      const detailedQuery = `事件：${event.title}（${event.date}）\n\n请提供该事件的详细分析，包括事件背景、主要过程、关键人物、影响与意义。请尽可能提供多方观点，并分析该事件在${query}整体发展中的位置与作用。`;
+      const detailedQuery = `事件：${event.title}（${event.date}）\n\n请提供该事件的详细分析，包括事件背景、主要过程、关键人物、影响与意义。请尽可能提供多方观点，并分析该事件在"${query}"整体发展中的位置与作用。`;
 
       const detailsContent = await fetchEventDetails(
         event.id,
         detailedQuery,
         apiConfig,
         progressCallback,
-<<<<<<< HEAD
-        streamingPreference ? detailsChunkCallback : undefined
+        streamCallback
       );
 
       if (streamingPreference) {
-        if (timelineComponentRef.current) {
-          timelineComponentRef.current.completeStreamingDetails();
+        if (inputRef.current) {
+          inputRef.current.value = detailsContent;
+          inputRef.current.focus();
         }
       } else {
         setCurrentStreamingContent(detailsContent);
       }
 
-=======
-        streamCallback
-      );
-
->>>>>>> upstream/main
       setTimeout(() => {
         setSearchProgressVisible(false);
         setSearchProgressActive(false);
@@ -736,31 +679,6 @@ function MainContent() {
         </div>
       </form>
 
-<<<<<<< HEAD
-=======
-      {/* 保留原来的百度热搜榜弹窗，以便保留兼容性 */}
-      <BaiduHotList
-        visible={showHotList}
-        onClose={() => setShowHotList(false)}
-        onSelectHotItem={handleHotItemClick}
-      />
-
-      {/* 飞行热搜项 */}
-      {flyingHotItem && (
-        <div
-          className="fixed z-50 fly-to-input bg-primary text-primary-foreground px-3 py-1.5 rounded-full text-sm font-medium"
-          style={{
-            left: flyingHotItem.startX,
-            top: flyingHotItem.startY,
-            transform: 'translate(-50%, -50%)'
-          }}
-        >
-          {flyingHotItem.title}
-        </div>
-      )}
-
-      {/* 搜索进度显示 */}
->>>>>>> upstream/main
       <div className={`w-full max-w-3xl mx-auto px-4 transition-opacity duration-300 ${searchProgressVisible ? 'opacity-100' : 'opacity-0'}`}
            style={{marginTop: searchPosition === 'center' ? "calc(50vh + 180px)" : "80px", zIndex: 15}}>
         <SearchProgress
@@ -813,12 +731,12 @@ function MainContent() {
             )}
 
             <Timeline
-              ref={timelineComponentRef}
               events={filteredEvents}
-              isLoading={isLoading}
-              onRequestDetails={handleRequestDetails}
-              summary={streamingSummary || timelineData.summary}
-              streamingDetails={isStreamingDetails}
+              selectedEventId={streamingEvents.length > 0 ? streamingEvents[0].id : null}
+              onSelectEvent={handleViewEventDetails}
+              showSortDirection={false}
+              sortDirection={sortDirection}
+              onChangeSortDirection={(direction) => setSortDirection(direction)}
             />
           </div>
         )}
