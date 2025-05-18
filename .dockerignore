@@ -1,0 +1,27 @@
+.git
+.gitignore
+node_modules
+.next
+bun.lockb
+
+# 本地开发环境变量文件
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# IDE/Editor specific
+.vscode
+.idea
+*.swp
+
+# macOS specific
+.DS_Store
+
+# README 等文档可以忽略，除非运行时需要
+README.md
+LICENSE
+
+# 测试文件
+test-*.js
+test-*.ts

@@ -1,0 +1,30 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      # args: # 如果需要构建时参数
+      #   NEXT_PUBLIC_ALLOW_USER_CONFIG: "true"
+    image: oneline-app # 可选，构建后会打上这个 tag
+    container_name: oneline_app_container
+    ports:
+      - "13002:3000"
+    environment:
+      # API 相关 (服务器端)
+      API_ENDPOINT: "http://192.168.0.24:33005/v1/chat/completions"
+      API_MODEL: "deepseek-chat"
+      API_KEY: "sk-1lnT52hFjoTW0Mh379896bA4Fc724f1d93838dBe0609C9Eb"
+      # NEXT_PUBLIC 相关 (这些变量也会被 next start 进程读取)
+      NEXT_PUBLIC_API_ENDPOINT: "" # 可以与API_ENDPOINT相同，或留空让next.config.js处理
+      NEXT_PUBLIC_API_MODEL: "" # 可以与API_MODEL相同，或留空
+      NEXT_PUBLIC_API_KEY: "" # 可以与API_KEY相同，或留空
+      NEXT_PUBLIC_ALLOW_USER_CONFIG: "true"
+      NEXT_PUBLIC_ACCESS_PASSWORD: ""
+      NEXT_PUBLIC_SEARXNG_URL: "https://sousuo.emoe.top"
+      NEXT_PUBLIC_SEARXNG_ENABLED: "true"
+    # 如果你想在本地开发时使用卷挂载以实现热重载 (不适用于生产构建)
+    # volumes:
+    #   - .:/app
+    #   - /app/node_modules # 匿名卷，防止本地 node_modules 覆盖容器中的
+    #   - /app/.next # 匿名卷，防止本地 .next 覆盖容器中的
+    restart: unless-stopped
