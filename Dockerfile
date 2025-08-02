@@ -10,6 +10,9 @@ RUN bun install --frozen-lockfile
 # copy app files
 COPY . .
 
+# Create an empty public directory if it doesn't exist
+RUN mkdir -p public
+
 # build app
 RUN bun run build
 
