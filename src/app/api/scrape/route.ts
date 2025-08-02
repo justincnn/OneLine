@@ -10,7 +10,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'URL not provided' }, { status: 400 });
     }
 
-    const response = await axios.get(url);
+    const response = await axios.get(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+      }
+    });
     const html = response.data;
     const $ = cheerio.load(html);
 
