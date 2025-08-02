@@ -119,7 +119,7 @@ export function ApiSettings({ open, onOpenChange }: ApiSettingsProps) {
     setError('');
   };
 
-  const handleTavilyChange = (key: keyof TavilyConfig, value: string) => {
+  const handleTavilyChange = (key: keyof TavilyConfig, value: string | number) => {
     setTavilyConfig((prev: TavilyConfig) => ({
       ...prev,
       [key]: value
@@ -358,6 +358,19 @@ export function ApiSettings({ open, onOpenChange }: ApiSettingsProps) {
                           type="password"
                           className="sm:col-span-3 rounded-lg"
                           autoComplete="off"
+                        />
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-2 sm:gap-4 mt-2">
+                        <Label htmlFor="tavily-max-results" className="sm:text-right">
+                          搜索结果数量
+                        </Label>
+                        <Input
+                          id="tavily-max-results"
+                          type="number"
+                          value={tavilyConfig.maxResults || 7}
+                          onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleTavilyChange('maxResults', parseInt(e.target.value, 10))}
+                          placeholder="例如: 7"
+                          className="sm:col-span-3 rounded-lg"
                         />
                       </div>
                     </div>

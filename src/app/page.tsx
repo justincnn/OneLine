@@ -1,5 +1,6 @@
 "use client";
 
+import React from 'react';
 import { useState, useEffect, useRef } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -48,6 +49,10 @@ const renderMarkdown = (content: string) => {
 
 function MainContent() {
   const { apiConfig, isConfigured, isPasswordProtected, isPasswordValidated } = useApi();
+  const [companyName, setCompanyName] = useState('');
+  const [website, setWebsite] = useState('');
+  const [mainProducts, setMainProducts] = useState('');
+  const [isECommerce, setIsECommerce] = useState(false);
   const [query, setQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [timelineData, setTimelineData] = useState<TimelineData>({ events: [] });
@@ -242,11 +247,11 @@ function MainContent() {
       let eventDate: Date;
 
       if (dateParts.length === 3) {
-        eventDate = new Date(dateParts[0], dateParts[1] - 1, dateParts[2]);
+        eventDate = new Date(dateParts, dateParts - 1, dateParts);
       } else if (dateParts.length === 2) {
-        eventDate = new Date(dateParts[0], dateParts[1] - 1, 1);
+        eventDate = new Date(dateParts, dateParts - 1, 1);
       } else if (dateParts.length === 1) {
-        eventDate = new Date(dateParts[0], 0, 1);
+        eventDate = new Date(dateParts, 0, 1);
       } else {
         return true;
       }
@@ -282,14 +287,14 @@ function MainContent() {
 
     // First try to find the summary section marked with ===事件简介===
     const summaryMatch = content.match(/===事件简介===\s*([\s\S]*?)(?=\s*===经济影响===|$)/);
-    if (summaryMatch && summaryMatch[1]) {
+    if (summaryMatch && summaryMatch) {
       return summaryMatch[1].trim();
     }
 
     // If not found, try to extract the first paragraph as a fallback
-    const firstParagraph = content.split('\n\n')[0];
+    const firstParagraph = content.split('\n\n');
     if (firstParagraph) {
-      return firstParagraph.trim();
+      return firstParagraph[0].trim();
     }
 
     return '';
@@ -324,8 +329,11 @@ function MainContent() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!query.trim()) {
-      toast.warning('请输入搜索关键词');
+    const generatedQuery = `公司名: ${companyName}, 网址: ${website}, 主营产品: ${mainProducts}, 是否电商客户: ${isECommerce ? '是' : '否'}`;
+    setQuery(generatedQuery);
+
+    if (!companyName.trim() && !mainProducts.trim()) {
+      toast.warning('请至少输入公司名或主营产品');
       return;
     }
 
@@ -341,15 +349,15 @@ function MainContent() {
       return;
     }
 
-    if (timelineData.events.length > 0 && timelineVisible && lastSearchQuery.current === query.trim()) {
-      console.log("跳过重复搜索:", query);
+    if (timelineData.events.length > 0 && timelineVisible && lastSearchQuery.current === generatedQuery.trim()) {
+      console.log("跳过重复搜索:", generatedQuery);
       return;
     }
 
-    lastSearchQuery.current = query.trim();
+    lastSearchQuery.current = generatedQuery.trim();
 
     // Save search query to history
-    saveSearchToHistory(query);
+    saveSearchToHistory(generatedQuery);
 
     setShowSearchHistory(false);
 
@@ -418,7 +426,8 @@ function MainContent() {
       }
 
       // 判断查询类型以决定适当的分析方法
-      const shouldAnalyzeImpact = determineIfShouldAnalyzeImpact(query);
+      const impactQuery = generateImpactQuery();
+      const shouldAnalyzeImpact = determineIfShouldAnalyzeImpact(impactQuery);
       if (shouldAnalyzeImpact) {
         setShowImpact(true);
 
@@ -429,7 +438,7 @@ function MainContent() {
 
         let impactText = '';
         fetchImpactAssessment(
-          queryWithDateFilter,
+          impactQuery,
           apiConfig,
           progressCallback,
           (chunk, isDone) => {
@@ -508,25 +517,17 @@ function MainContent() {
   };
   // --- END UPDATED fetchData ---
 
+  const generateImpactQuery = (): string => {
+    let impactQuery = `该公司（${companyName}）的行业（主要针对其产品：${mainProducts}）最近发生了什么？该公司最近发生了什么？`;
+    if (isECommerce) {
+      impactQuery += ` 如果是电商，其客户的产品最近在跨境电商领域的竞争和趋势如何？`;
+    }
+    return impactQuery;
+  };
+
   // 判断查询是否适合做影响评估分析
   const determineIfShouldAnalyzeImpact = (queryText: string): boolean => {
-    // 检查查询内容是否是事件或话题，而不是简单的人物、概念或其他不适合影响分析的内容
-
-    // 判断是否是热点事件、社会现象、政治事件、经济事件、国际关系等有明显影响的主题
-    const impactAnalysisKeywords = [
-      '事件', '冲突', '危机', '战争', '协议', '签署', '宣布', '政策', '改革', '谈判',
-      '疫情', '灾害', '事故', '抗议', '示威', '选举', '公投', '会谈', '会议', '峰会',
-      '事故', '决策', '立法', '判决', '制裁', '合作', '争端', '矛盾', '问题', '风波',
-      '关系', '纠纷', '协议', '条约', '法案', '通过', '改变', '变化', '影响', '改革'
-    ];
-
-    // 检查查询中是否包含这些关键词
-    const hasImpactKeyword = impactAnalysisKeywords.some(keyword =>
-      queryText.includes(keyword)
-    );
-
-    // 简单的规则：查询文本较长（可能是描述性的事件）或包含影响分析关键词
-    return queryText.length > 8 || hasImpactKeyword;
+    return companyName.trim() !== '' || mainProducts.trim() !== '';
   };
 
   const formatDate = (date: Date | undefined): string => {
@@ -786,27 +787,41 @@ function MainContent() {
         )}
 
         <div className="p-4 w-full">
-          <div className="glass-card rounded-full overflow-hidden flex items-center p-1 pr-2">
-            <Input
-              ref={inputRef}
-              type="text"
-              placeholder="输入关键词，如：俄乌冲突..."
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              className="flex-1 border-0 bg-transparent focus-visible:ring-0 placeholder:text-muted-foreground/70 text-sm sm:text-base h-8 sm:h-10"
-              onFocus={(e) => {
-                e.stopPropagation();
-                setShowSearchHistory(true);
-              }}
-              onBlur={() => {
-                // Add a small delay before hiding search history to allow for clicks on history items
-                setTimeout(() => {
-                  setShowSearchHistory(false);
-                }, 200);
-              }}
-            />
+          <div className="glass-card rounded-lg overflow-hidden flex flex-col items-center p-4">
+            <div className="flex flex-col gap-2 w-full">
+              <Input
+                type="text"
+                placeholder="公司名"
+                value={companyName}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCompanyName(e.target.value)}
+                className="w-full border-0 bg-transparent focus-visible:ring-0 placeholder:text-muted-foreground/70 text-sm sm:text-base h-8 sm:h-10"
+              />
+              <Input
+                type="text"
+                placeholder="网址"
+                value={website}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setWebsite(e.target.value)}
+                className="w-full border-0 bg-transparent focus-visible:ring-0 placeholder:text-muted-foreground/70 text-sm sm:text-base h-8 sm:h-10"
+              />
+              <Input
+                type="text"
+                placeholder="主营产品"
+                value={mainProducts}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setMainProducts(e.target.value)}
+                className="w-full border-0 bg-transparent focus-visible:ring-0 placeholder:text-muted-foreground/70 text-sm sm:text-base h-8 sm:h-10"
+              />
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="isECommerce"
+                  checked={isECommerce}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setIsECommerce(e.target.checked)}
+                />
+                <label htmlFor="isECommerce">是否电商客户</label>
+              </div>
+            </div>
 
-            <div className="flex items-center">
+            <div className="flex items-center mt-4">
               <Select
                 value={dateFilter.option}
                 onValueChange={handleDateFilterChange as (value: string) => void}
