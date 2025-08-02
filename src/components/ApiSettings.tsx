@@ -126,7 +126,6 @@ export function ApiSettings({ open, onOpenChange }: ApiSettingsProps) {
     }));
   };
 
-  // 更新保存函数以包含SearXNG配置
   const handleSave = () => {
     if (!allowUserConfig) {
       onOpenChange(false);
@@ -134,41 +133,39 @@ export function ApiSettings({ open, onOpenChange }: ApiSettingsProps) {
     }
 
     if (isEnvConfigActive && hasEnvConfig) {
-      // 确保保存SearXNG配置的同时也更新环境变量配置选择
       updateApiConfig({
         tavily: tavilyConfig
       });
-
-      // 确保两边设置都是同步的
       setUseEnvConfig(true);
-
-      // 直接存储到localStorage，以防ApiContext中的逻辑未执行
       if (typeof window !== 'undefined') {
         localStorage.setItem('oneLine_useEnvConfig', 'true');
       }
-
       onOpenChange(false);
       return;
     }
 
-    if (!endpoint.trim()) {
-      setError('API端点不能为空');
+    // Allow saving if at least Tavily API key is provided, even if LLM config is not.
+    if (!apiKey.trim() && !tavilyConfig.apiKey.trim()) {
+      setError('请至少提供一个 API 密钥（语言模型或 Tavily）');
       return;
     }
+    
+    // Validate LLM fields only if API key is provided
+    if (apiKey.trim()) {
+        if (!endpoint.trim()) {
+          setError('API端点不能为空');
+          return;
+        }
 
-    if (!endpoint.startsWith('http://') && !endpoint.startsWith('https://')) {
-      setError('API端点需要以http://或https://开头');
-      return;
-    }
+        if (!endpoint.startsWith('http://') && !endpoint.startsWith('https://')) {
+          setError('API端点需要以http://或https://开头');
+          return;
+        }
 
-    if (!model.trim()) {
-      setError('模型名称不能为空');
-      return;
-    }
-
-    if (!apiKey.trim()) {
-      setError('API密钥不能为空');
-      return;
+        if (!model.trim()) {
+          setError('模型名称不能为空');
+          return;
+        }
     }
 
 
@@ -181,10 +178,8 @@ export function ApiSettings({ open, onOpenChange }: ApiSettingsProps) {
       tavily: tavilyConfig
     });
 
-    // 确保两边设置都是同步的
     setUseEnvConfig(false);
 
-    // 直接存储到localStorage，以防ApiContext中的逻辑未执行
     if (typeof window !== 'undefined') {
       localStorage.setItem('oneLine_useEnvConfig', 'false');
     }
@@ -228,7 +223,7 @@ export function ApiSettings({ open, onOpenChange }: ApiSettingsProps) {
               ? '请输入访问密码以继续'
               : allowUserConfig
                 ? '配置API和搜索设置'
-                : '当前使用环境变量配置，可以配置SearXNG搜索'}
+                : '当前使用环境变量配置，可以配置Tavily搜索'}
           </DialogDescription>
         </DialogHeader>
 
