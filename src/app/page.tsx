@@ -250,13 +250,13 @@ function MainContent() {
       let eventDate: Date;
 
       if (dateParts.length === 3) {
-        eventDate = new Date(dateParts, dateParts - 1, dateParts);
+        eventDate = new Date(dateParts[0], dateParts[1] - 1, dateParts[2]);
       } else if (dateParts.length === 2) {
-        eventDate = new Date(dateParts, dateParts - 1, 1);
+        eventDate = new Date(dateParts[0], dateParts[1] - 1, 1);
       } else if (dateParts.length === 1) {
-        eventDate = new Date(dateParts, 0, 1);
+        eventDate = new Date(dateParts[0], 0, 1);
       } else {
-        return true;
+        return true; // Invalid date format, include by default
       }
 
       if (startDate && eventDate < startDate) {
@@ -369,20 +369,26 @@ function MainContent() {
     if (website.trim()) {
       try {
         progressCallback('正在抓取网站信息...', 'pending');
-        const { products } = await scrapeWebsite(website);
-        setScrapedProducts(products);
-        progressCallback('网站信息抓取完成', 'done');
+        const scrapedData = await scrapeWebsite(website);
+        if (scrapedData && scrapedData.products.length > 0) {
+          const { products } = scrapedData;
+          setScrapedProducts(products);
+          progressCallback('网站信息抓取完成', 'completed');
 
-        const mainProductsList = mainProducts.split(',').map(p => p.trim()).filter(Boolean);
-        const productsChanged = JSON.stringify(products.sort()) !== JSON.stringify(mainProductsList.sort());
+          const mainProductsList = mainProducts.split(',').map(p => p.trim()).filter(Boolean);
+          const productsChanged = JSON.stringify(products.sort()) !== JSON.stringify(mainProductsList.sort());
 
-        if (products.length > 0 && mainProductsList.length > 0 && productsChanged) {
-          setShowProductConfirmation(true);
-          return; // 等待用户确认
+          if (products.length > 0 && mainProductsList.length > 0 && productsChanged) {
+            setShowProductConfirmation(true);
+            return; // 等待用户确认
+          }
+        } else {
+          progressCallback('网站信息抓取失败，已跳过', 'error');
+          toast.error('网站信息抓取失败，将继续执行搜索。');
         }
       } catch (error) {
-        console.error("抓取网站失败:", error);
-        toast.error('网站信息抓取失败，将继续执行搜索。');
+        console.error("处理网站抓取时出错:", error);
+        toast.error('处理网站信息时出错，将继续执行搜索。');
       }
     }
 
@@ -783,6 +789,27 @@ function MainContent() {
     }
   };
 
+  const handleNewSearch = () => {
+    setCompanyName('');
+    setWebsite('');
+    setMainProducts('');
+    setIsECommerce(false);
+    setAdditionalInfo('');
+    setQuery('');
+    setTimelineData({ events: [] });
+    setError('');
+    setTimelineVisible(false);
+    setSearchPosition('center');
+    setSearchProgressVisible(false);
+    setSearchProgressSteps([]);
+    setShowImpact(false);
+    setEventSummary(null);
+    setShowEventSummary(false);
+    setImpactContent(null);
+    setParsedImpact(null);
+    lastSearchQuery.current = '';
+  };
+
   return (
     <main className="flex min-h-screen flex-col relative">
       <ProductConfirmationDialog
@@ -911,6 +938,17 @@ function MainContent() {
                   <Search size={16} />
                 }
               </Button>
+              {timelineVisible && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={handleNewSearch}
+                  className="ml-2 rounded-full text-xs"
+                >
+                  新搜索
+                </Button>
+              )}
             </div>
           </div>
 
