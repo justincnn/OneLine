@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { type ApiConfig, type TimelineData, TimelineEvent, type Person, type TavilyResult, type TavilySearchItem, ECommerceMode } from '@/types';
+import { type ApiConfig, type TimelineData, TimelineEvent, type Person, type TavilyResult, type TavilySearchItem } from '@/types';
 import { enhancedSearch } from './searchEnhancer';
 
 // 设置API请求的总超时时间，避免超出Netlify限制
@@ -68,6 +68,7 @@ const SYSTEM_PROMPT = `
 10. 描述中包含事件产生的影响和后续发展
 11. 每个事件的描述要具体、详实但不过度冗长，通常在100-300字之间为宜
 12. 注重记录事件的事实性内容，而非评论性或推测性内容
+13. **至关重要**: 你的回答必须严格且完全基于我提供的搜索结果。禁止使用任何外部知识或进行任何形式的推测。
 `;
 
 // 详细事件分析的系统提示
@@ -356,7 +357,6 @@ export async function performSearch(
   query: string,
   apiConfig: ApiConfig,
   progressCallback?: ProgressCallback,
-  eCommerceMode: ECommerceMode = 'notECommerce',
   dateRange?: { startDate?: Date; endDate?: Date }
 ): Promise<TavilyResult | null> {
   try {
@@ -372,14 +372,7 @@ export async function performSearch(
     }
 
     const apiUrl = '/api/search';
-    const excludeDomains = [];
-    if (eCommerceMode === 'b2c' || eCommerceMode === 'both') {
-      // Exclude B2B platforms for B2C searches
-    }
-    if (eCommerceMode === 'b2b' || eCommerceMode === 'both') {
-      // Exclude B2C platforms for B2B searches
-      excludeDomains.push('alibaba.com', 'tradekey.com');
-    }
+    const excludeDomains: string[] = [];
 
     const payload = {
       query: dateRange ? `${query} after:${dateRange.startDate?.toISOString().split('T')[0]} before:${dateRange.endDate?.toISOString().split('T')[0]}` : query,
@@ -442,7 +435,6 @@ export async function fetchTimelineData(
   apiConfig: ApiConfig,
   progressCallback?: ProgressCallback,
   streamCallback?: StreamCallback,
-  eCommerceMode: ECommerceMode = 'notECommerce',
   dateRange?: { startDate?: Date; endDate?: Date }
 ): Promise<TimelineData> {
   try {
@@ -459,7 +451,7 @@ export async function fetchTimelineData(
 
     if (apiConfig.tavily?.apiKey) {
       const searchPromises = queries.map(query =>
-        performSearch(query, apiConfig, progressCallback, eCommerceMode, dateRange)
+        performSearch(query, apiConfig, progressCallback, dateRange)
       );
       const searchResultsArray = await Promise.all(searchPromises);
       
@@ -489,7 +481,7 @@ export async function fetchTimelineData(
         { role: "system", content: SYSTEM_PROMPT },
         // 如果有搜索结果，添加到消息中
         ...(searchContext ? [{ role: "system", content: searchContext }] : []),
-        { role: "user", content: `请根据以下多个来源的搜索结果，为我生成一个全面的时间轴和总结。` }
+        { role: "user", content: `请根据以下针对查询 "${queries.join(', ')}" 的搜索结果，为我生成一个全面的时间轴和总结。` }
       ],
       temperature: 0.7
     };
@@ -582,11 +574,7 @@ export async function fetchEventDetails(
 
     if (apiConfig.tavily?.apiKey) {
       // This is a temporary solution. We need to parse the ecommerce mode from the query.
-      let eCommerceMode: ECommerceMode = 'notECommerce';
-      if (query.includes('B2C')) eCommerceMode = 'b2c';
-      if (query.includes('B2B')) eCommerceMode = 'b2b';
-      if (query.includes('B2C') && query.includes('B2B')) eCommerceMode = 'both';
-      searchResults = await performSearch(query, apiConfig, progressCallback, eCommerceMode);
+      searchResults = await performSearch(query, apiConfig, progressCallback);
       searchContext = formatSearchResultsForAI(searchResults);
       if (progressCallback) {
         progressCallback('事件详情搜索完成', 'completed');
@@ -693,11 +681,7 @@ export async function fetchImpactAssessment(
 
     if (apiConfig.tavily?.apiKey) {
       // This is a temporary solution. We need to parse the ecommerce mode from the query.
-      let eCommerceMode: ECommerceMode = 'notECommerce';
-      if (query.includes('B2C')) eCommerceMode = 'b2c';
-      if (query.includes('B2B')) eCommerceMode = 'b2b';
-      if (query.includes('B2C') && query.includes('B2B')) eCommerceMode = 'both';
-      searchResults = await performSearch(query, apiConfig, progressCallback, eCommerceMode);
+      searchResults = await performSearch(query, apiConfig, progressCallback);
       searchContext = formatSearchResultsForAI(searchResults);
       if (progressCallback) {
         progressCallback('影响评估数据搜索完成', 'completed');

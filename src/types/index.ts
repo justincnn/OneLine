@@ -76,4 +76,3 @@ export interface TavilySearchItem {
   publish_date?: string;
 }
 
-export type ECommerceMode = 'notECommerce' | 'b2c' | 'b2b' | 'both';
