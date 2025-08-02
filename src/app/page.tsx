@@ -789,6 +789,23 @@ function MainContent() {
     }
   };
 
+  const handleResubmit = () => {
+    if (!lastSearchQuery.current) {
+      toast.info('没有可重新搜索的查询');
+      return;
+    }
+
+    // Reset progress and timers
+    setSearchProgressSteps([]);
+    setSearchProgressActive(true);
+    setSearchProgressVisible(true);
+    setSearchStartTime(Date.now());
+    setSearchTimeElapsed(null);
+
+    // Re-fetch data with the last query
+    fetchData(lastSearchQuery.current);
+  };
+
   const handleNewSearch = () => {
     setCompanyName('');
     setWebsite('');
@@ -939,15 +956,26 @@ function MainContent() {
                 }
               </Button>
               {timelineVisible && (
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={handleNewSearch}
-                  className="ml-2 rounded-full text-xs"
-                >
-                  新搜索
-                </Button>
+                <>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={handleNewSearch}
+                    className="ml-2 rounded-full text-xs"
+                  >
+                    新搜索
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={handleResubmit}
+                    className="ml-2 rounded-full text-xs"
+                  >
+                    重新搜索
+                  </Button>
+                </>
               )}
             </div>
           </div>
