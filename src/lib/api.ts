@@ -779,3 +779,13 @@ export async function fetchImpactAssessment(
     throw error;
   }
 }
+
+export async function scrapeWebsite(url: string): Promise<{ products: string[] }> {
+  try {
+    const response = await axios.post('/api/scrape', { url });
+    return response.data;
+  } catch (error) {
+    console.error("Website scraping failed:", error);
+    throw error;
+  }
+}

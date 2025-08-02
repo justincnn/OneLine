@@ -18,7 +18,7 @@ import {
   SelectValue
 } from '@/components/ui/select';
 import type { TimelineData, TimelineEvent, DateFilterOption, DateFilterConfig } from '@/types';
-import { fetchTimelineData, fetchEventDetails, fetchImpactAssessment, type ProgressCallback, type StreamCallback } from '@/lib/api';
+import { fetchTimelineData, fetchEventDetails, fetchImpactAssessment, scrapeWebsite, type ProgressCallback, type StreamCallback } from '@/lib/api';
 import { SearchProgress, type SearchProgressStep } from '@/components/SearchProgress';
 import { SearchHistory, type SearchHistoryItem } from '@/components/SearchHistory';
 import { toast } from 'sonner';
@@ -53,6 +53,7 @@ function MainContent() {
   const [website, setWebsite] = useState('');
   const [mainProducts, setMainProducts] = useState('');
   const [isECommerce, setIsECommerce] = useState(false);
+  const [additionalInfo, setAdditionalInfo] = useState('');
   const [query, setQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [timelineData, setTimelineData] = useState<TimelineData>({ events: [] });
@@ -87,6 +88,8 @@ function MainContent() {
   const [searchTimeElapsed, setSearchTimeElapsed] = useState<number | null>(null);
 
   const lastSearchQuery = useRef<string>('');
+  const [scrapedProducts, setScrapedProducts] = useState<string[]>([]);
+  const [showProductConfirmation, setShowProductConfirmation] = useState(false);
 
   // For event summary (事件概述)
   const [eventSummary, setEventSummary] = useState<string | null>(null);
@@ -355,18 +358,33 @@ function MainContent() {
     }
 
     lastSearchQuery.current = generatedQuery.trim();
-
-    // Save search query to history
     saveSearchToHistory(generatedQuery);
-
     setShowSearchHistory(false);
-
     setSearchProgressSteps([]);
     setSearchProgressActive(true);
     setSearchProgressVisible(true);
-
     setSearchStartTime(Date.now());
     setSearchTimeElapsed(null);
+
+    if (website.trim()) {
+      try {
+        progressCallback('正在抓取网站信息...', 'pending');
+        const { products } = await scrapeWebsite(website);
+        setScrapedProducts(products);
+        progressCallback('网站信息抓取完成', 'done');
+
+        const mainProductsList = mainProducts.split(',').map(p => p.trim()).filter(Boolean);
+        const productsChanged = JSON.stringify(products.sort()) !== JSON.stringify(mainProductsList.sort());
+
+        if (products.length > 0 && mainProductsList.length > 0 && productsChanged) {
+          setShowProductConfirmation(true);
+          return; // 等待用户确认
+        }
+      } catch (error) {
+        console.error("抓取网站失败:", error);
+        toast.error('网站信息抓取失败，将继续执行搜索。');
+      }
+    }
 
     if (searchPosition === 'center') {
       setSearchPosition('top');
@@ -379,7 +397,7 @@ function MainContent() {
   };
 
   // --- UPDATED fetchData: More intelligent analysis based on the query type ---
-  const fetchData = async () => {
+  const fetchData = async (overrideQuery?: string) => {
     setIsLoading(true);
     setError('');
     setShowImpact(false); // Initially don't show impact until we determine if it's relevant
@@ -393,7 +411,7 @@ function MainContent() {
     }
 
     try {
-      let queryWithDateFilter = query;
+      let queryWithDateFilter = overrideQuery || query;
 
       if (dateFilter.option !== 'all') {
         let dateRangeText = '';
@@ -746,8 +764,35 @@ function MainContent() {
     }, 100);
   };
 
+  const handleProductConfirmation = (confirmedProducts: string[]) => {
+    setMainProducts(confirmedProducts.join(', '));
+    setShowProductConfirmation(false);
+    
+    // Update query with confirmed products before fetching data
+    const updatedQuery = `公司名: ${companyName}, 网址: ${website}, 主营产品: ${confirmedProducts.join(', ')}, 是否电商客户: ${isECommerce ? '是' : '否'}`;
+    setQuery(updatedQuery);
+    lastSearchQuery.current = updatedQuery.trim();
+
+    if (searchPosition === 'center') {
+      setSearchPosition('top');
+      setTimeout(() => {
+        fetchData(updatedQuery);
+      }, 700);
+    } else {
+      fetchData(updatedQuery);
+    }
+  };
+
   return (
     <main className="flex min-h-screen flex-col relative">
+      <ProductConfirmationDialog
+        open={showProductConfirmation}
+        onOpenChange={setShowProductConfirmation}
+        onConfirm={handleProductConfirmation}
+        onCancel={() => setShowProductConfirmation(false)}
+        scrapedProducts={scrapedProducts}
+        userProducts={mainProducts}
+      />
       <div className="bg-gradient-purple" />
       <div className="bg-gradient-blue" />
 
@@ -819,6 +864,13 @@ function MainContent() {
                 />
                 <label htmlFor="isECommerce">是否电商客户</label>
               </div>
+              <Input
+                type="text"
+                placeholder="补充信息"
+                value={additionalInfo}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setAdditionalInfo(e.target.value)}
+                className="w-full border-0 bg-transparent focus-visible:ring-0 placeholder:text-muted-foreground/70 text-sm sm:text-base h-8 sm:h-10"
+              />
             </div>
 
             <div className="flex items-center mt-4">
@@ -999,6 +1051,36 @@ function MainContent() {
         </Button>
       )}
     </main>
+  );
+}
+
+function ProductConfirmationDialog({ open, onOpenChange, onConfirm, onCancel, scrapedProducts, userProducts }: { open: boolean, onOpenChange: (open: boolean) => void, onConfirm: (products: string[]) => void, onCancel: () => void, scrapedProducts: string[], userProducts: string }) {
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center">
+      <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg max-w-md w-full">
+        <h2 className="text-lg font-bold mb-4">产品确认</h2>
+        <p className="mb-4">我们从您提供的网站上抓取到了以下产品信息，这与您输入的主营产品不完全一致。请选择您希望用于后续分析的产品列表。</p>
+        
+        <div className="mb-4">
+          <h3 className="font-semibold">网站抓取的产品:</h3>
+          <ul className="list-disc list-inside text-sm text-gray-600 dark:text-gray-400">
+            {scrapedProducts.map((p, i) => <li key={i}>{p}</li>)}
+          </ul>
+        </div>
+
+        <div className="mb-6">
+          <h3 className="font-semibold">您输入的产品:</h3>
+          <p className="text-sm text-gray-600 dark:text-gray-400">{userProducts}</p>
+        </div>
+
+        <div className="flex justify-end gap-4">
+          <Button variant="outline" onClick={() => onConfirm(userProducts.split(',').map(p => p.trim()))}>使用输入的产品</Button>
+          <Button onClick={() => onConfirm(scrapedProducts)}>使用网站产品</Button>
+        </div>
+      </div>
+    </div>
   );
 }
 
