@@ -2,6 +2,34 @@ import axios from 'axios';
 import { type ApiConfig, type TimelineData, TimelineEvent, type Person, type TavilyResult, type TavilySearchItem } from '@/types';
 import { enhancedSearch } from './searchEnhancer';
 
+// Helper function to pause execution
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+// Wrapper for API calls with retry logic for 429 errors
+async function requestWithRetry<T>(
+  requestFn: () => Promise<T>,
+  maxRetries = 5,
+  initialDelay = 1000
+): Promise<T> {
+  let retries = 0;
+  while (true) {
+    try {
+      return await requestFn();
+    } catch (error: any) {
+      // Check if it's an axios error and has a 429 status code
+      if (error.response?.status === 429 && retries < maxRetries) {
+        retries++;
+        const delay = initialDelay * Math.pow(2, retries - 1) + Math.random() * 1000;
+        console.warn(`API rate limit hit. Retrying in ${delay.toFixed(0)}ms... (Attempt ${retries}/${maxRetries})`);
+        await sleep(delay);
+      } else {
+        // For other errors or if max retries are exceeded, throw the error
+        throw error;
+      }
+    }
+  }
+}
+
 // 设置API请求的总超时时间，避免超出Netlify限制
 const API_TIMEOUT_MS = 45000; // 45秒，低于Netlify的60秒限制
 
@@ -117,95 +145,105 @@ export async function fetchWithStream(
   payload: any,
   streamCallback: StreamCallback
 ): Promise<void> {
-  try {
-    const response = await fetch(apiUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        ...payload,
-        stream: true
-      })
-    });
+  const maxRetries = 5;
+  const initialDelay = 1000;
+  let retries = 0;
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`API responded with status ${response.status}: ${errorText}`);
-    }
+  while (true) {
+    try {
+      const response = await fetch(apiUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...payload,
+          stream: true
+        })
+      });
 
-    if (!response.body) {
-      throw new Error("Response body is null");
-    }
-
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = "";
-
-    while (true) {
-      const { done, value } = await reader.read();
-
-      if (done) {
-        // 确保处理最后一块数据
-        if (buffer.length > 0) {
-          streamCallback(buffer, true);
-        }
-        break;
+      if (response.status === 429 && retries < maxRetries) {
+        // Create a specific error to be caught by the retry logic
+        throw new Error('RATE_LIMIT_ERROR');
       }
 
-      // 解码此块并加入缓冲区
-      const chunk = decoder.decode(value, { stream: true });
-      buffer += chunk;
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`API responded with status ${response.status}: ${errorText}`);
+      }
 
-      // 处理SSE格式的数据
-      const lines = buffer.split("\n\n");
-      buffer = lines.pop() || ""; // 最后一行可能不完整，保留到下一次迭代
+      if (!response.body) {
+        throw new Error("Response body is null");
+      }
 
-      for (const line of lines) {
-        if (line.startsWith("data: ")) {
-          try {
-            const data = line.slice(6); // 移除 "data: " 前缀
-            if (data === "[DONE]") {
-              // 流结束标记
-              streamCallback("", true);
-              return;
-            }
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
 
-            // 根据API的响应格式处理内容
-            // 需要根据实际的API响应格式进行调整
+      while (true) {
+        const { done, value } = await reader.read();
+
+        if (done) {
+          if (buffer.length > 0) {
+            streamCallback(buffer, true);
+          }
+          break;
+        }
+
+        const chunk = decoder.decode(value, { stream: true });
+        buffer += chunk;
+
+        const lines = buffer.split("\n\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
             try {
-              const parsedData = JSON.parse(data);
-              const content = parsedData.choices?.[0]?.delta?.content ||
-                             parsedData.choices?.[0]?.message?.content ||
-                             "";
-              if (content) {
-                streamCallback(content, false);
+              const data = line.slice(6);
+              if (data === "[DONE]") {
+                streamCallback("", true);
+                return; // Exit successfully
+              }
+              try {
+                const parsedData = JSON.parse(data);
+                const content = parsedData.choices?.[0]?.delta?.content ||
+                               parsedData.choices?.[0]?.message?.content ||
+                               "";
+                if (content) {
+                  streamCallback(content, false);
+                }
+              } catch (e) {
+                streamCallback(data, false);
               }
             } catch (e) {
-              // 如果不是标准JSON格式，直接传递数据
-              streamCallback(data, false);
+              console.error("Error parsing stream data:", e);
             }
-          } catch (e) {
-            console.error("Error parsing stream data:", e);
-          }
-        } else if (line.startsWith("event: error")) {
-          // 处理错误事件
-          const errorLine = lines.find(l => l.startsWith("data: "));
-          if (errorLine) {
-            try {
-              const errorData = JSON.parse(errorLine.slice(6));
-              throw new Error(errorData.error || "Stream error");
-            } catch (e) {
-              throw new Error("Stream error: " + errorLine);
+          } else if (line.startsWith("event: error")) {
+            const errorLine = lines.find(l => l.startsWith("data: "));
+            if (errorLine) {
+              try {
+                const errorData = JSON.parse(errorLine.slice(6));
+                throw new Error(errorData.error || "Stream error");
+              } catch (e) {
+                throw new Error("Stream error: " + errorLine);
+              }
+            } else {
+              throw new Error("Unknown stream error");
             }
-          } else {
-            throw new Error("Unknown stream error");
           }
         }
       }
+      return; // Success, exit retry loop
+    } catch (error: any) {
+      if (error.message === 'RATE_LIMIT_ERROR' && retries < maxRetries) {
+        retries++;
+        const delay = initialDelay * Math.pow(2, retries - 1) + Math.random() * 1000;
+        console.warn(`Stream API rate limit hit. Retrying in ${delay.toFixed(0)}ms... (Attempt ${retries}/${maxRetries})`);
+        await sleep(delay);
+      } else {
+        console.error("Stream request failed:", error);
+        streamCallback(`错误：${error.message}`, true);
+        throw error; // Re-throw other errors or if max retries are exceeded
+      }
     }
-  } catch (error: any) {
-    console.error("Stream request failed:", error);
-    streamCallback(`错误：${error.message}`, true);
-    throw error;
   }
 }
 
@@ -515,18 +553,13 @@ export async function fetchTimelineData(
         }
       });
     } else {
-      // 非流式处理：原有的实现
-      const headers = {
-        'Content-Type': 'application/json'
-      };
-
-      // 设置请求超时时间为45秒，避免Netlify的504超时
-      const response = await axios.post(apiUrl, payload, {
-        headers,
-        timeout: API_TIMEOUT_MS
-      });
-
-      // 提取AI响应内容
+      // 非流式处理：使用重试逻辑
+      const response = await requestWithRetry(() =>
+        axios.post(apiUrl, payload, {
+          headers: { 'Content-Type': 'application/json' },
+          timeout: API_TIMEOUT_MS,
+        })
+      );
       content = response.data.choices[0].message.content;
 
       if (progressCallback) {
@@ -630,16 +663,13 @@ export async function fetchEventDetails(
         }
       });
     } else {
-      // 非流式处理：原有的实现
-      const headers = {
-        'Content-Type': 'application/json'
-      };
-
-      // 设置请求超时时间为45秒，避免Netlify的504超时
-      const response = await axios.post(apiUrl, payload, {
-        headers,
-        timeout: API_TIMEOUT_MS
-      });
+      // 非流式处理：使用重试逻辑
+      const response = await requestWithRetry(() =>
+        axios.post(apiUrl, payload, {
+          headers: { 'Content-Type': 'application/json' },
+          timeout: API_TIMEOUT_MS,
+        })
+      );
 
       // 提取内容
       content = response.data.choices[0].message.content;
@@ -729,16 +759,13 @@ export async function fetchImpactAssessment(
         }
       });
     } else {
-      // 非流式处理
-      const headers = {
-        'Content-Type': 'application/json'
-      };
-
-      // 设置请求超时
-      const response = await axios.post(apiUrl, payload, {
-        headers,
-        timeout: API_TIMEOUT_MS
-      });
+      // 非流式处理：使用重试逻辑
+      const response = await requestWithRetry(() =>
+        axios.post(apiUrl, payload, {
+          headers: { 'Content-Type': 'application/json' },
+          timeout: API_TIMEOUT_MS,
+        })
+      );
 
       // 提取内容
       content = response.data.choices[0].message.content;
