@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { type ApiConfig, type TimelineData, TimelineEvent, type Person, type SearxngResult, type SearxngSearchItem } from '@/types';
+import { type ApiConfig, type TimelineData, TimelineEvent, type Person, type TavilyResult, type TavilySearchItem } from '@/types';
 import { enhancedSearch } from './searchEnhancer';
 
 // 设置API请求的总超时时间，避免超出Netlify限制
@@ -196,7 +196,7 @@ export async function fetchWithStream(
         }
       }
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error("Stream request failed:", error);
     streamCallback(`错误：${error.message}`, true);
     throw error;
@@ -331,7 +331,7 @@ function parseTimelineText(text: string): TimelineData {
     }
 
     return result;
-  } catch (error) {
+  } catch (error: any) {
     console.error("解析文本响应失败:", error);
     return { events: [] };
   }
@@ -346,158 +346,64 @@ function getApiUrl(apiConfig: ApiConfig, endpoint = 'chat'): string {
 // 新增: 定义进度回调类型
 export type ProgressCallback = (message: string, status: 'pending' | 'completed' | 'error') => void;
 
-// 新增：执行SearXNG搜索
-export async function searchWithSearxng(
+// 执行Tavily搜索
+export async function performSearch(
   query: string,
   apiConfig: ApiConfig,
   progressCallback?: ProgressCallback
-): Promise<SearxngResult | null> {
+): Promise<TavilyResult | null> {
   try {
-    // 检查是否启用SearXNG
-    if (!apiConfig.searxng?.enabled || !apiConfig.searxng?.url) {
+    if (!apiConfig.tavily?.apiKey) {
       if (progressCallback) {
-        progressCallback('SearXNG搜索未启用，跳过搜索步骤', 'completed');
+        progressCallback('Tavily API 密钥未配置，跳过搜索步骤', 'completed');
       }
       return null;
     }
 
     if (progressCallback) {
-      progressCallback(`正在使用搜索引擎查询：${query}`, 'pending');
+      progressCallback(`正在使用 Tavily 搜索查询：${query}`, 'pending');
     }
 
-    // 使用增强搜索功能
-    const result = await enhancedSearch(query, apiConfig, progressCallback);
-
-    if (progressCallback) {
-      if (result) {
-        progressCallback(`搜索完成，获取到 ${result.results.length} 条结果`, 'completed');
-      } else {
-        progressCallback('搜索未返回有效结果', 'completed');
-      }
-    }
-
-    return result;
-  } catch (error) {
-    console.error("SearXNG搜索请求失败:", error);
-
-    if (progressCallback) {
-      progressCallback(`搜索失败：${error instanceof Error ? error.message : '未知错误'}`, 'error');
-      progressCallback('尝试使用简单搜索作为备选方案', 'pending');
-    }
-
-    // 如果增强搜索失败，回退到简单搜索
-    return simpleSearch(query, apiConfig, progressCallback);
-  }
-}
-
-// 简单搜索 - 作为后备方案
-async function simpleSearch(
-  query: string,
-  apiConfig: ApiConfig,
-  progressCallback?: ProgressCallback
-): Promise<SearxngResult | null> {
-  try {
-    if (!apiConfig.searxng?.enabled || !apiConfig.searxng?.url) {
-      return null;
-    }
-
-    const searxngUrl = apiConfig.searxng.url;
-    // 使用搜索API端点
     const apiUrl = '/api/search';
-
-    if (progressCallback) {
-      progressCallback(`使用简单搜索模式查询：${query}`, 'pending');
-    }
-
     const payload = {
       query,
-      searxngUrl,
-      categories: apiConfig.searxng.categories || 'general',
-      language: apiConfig.searxng.language || 'zh',
-      timeRange: apiConfig.searxng.timeRange || 'year',
-      engines: apiConfig.searxng.engines || null,
-      numResults: apiConfig.searxng.numResults || 10
+      apiKey: apiConfig.tavily.apiKey,
+      max_results: apiConfig.tavily.maxResults || 7,
+      // You can add other Tavily parameters from apiConfig here
     };
 
     const response = await axios.post(apiUrl, payload);
 
     if (progressCallback) {
-      progressCallback('简单搜索完成', 'completed');
-    }
-
-    // 检查响应格式，确保返回的是有效的SearxngResult
-    if (response.data && Array.isArray(response.data.results)) {
-      return response.data;
-    } else {
-      console.error("SearXNG搜索响应格式不正确:", response.data);
-      // 尝试自适应处理响应格式
-      if (response.data && typeof response.data === 'object') {
-        // 如果响应是一个对象但结构不同，尝试适配为我们需要的格式
-        const adaptedResult: SearxngResult = {
-          query: query,
-          results: []
-        };
-
-        // 尝试从响应中提取结果数组
-        if (Array.isArray(response.data.results)) {
-          adaptedResult.results = response.data.results;
-        } else if (Array.isArray(response.data)) {
-          // 如果响应本身是数组，将其作为结果
-          adaptedResult.results = response.data;
-        } else {
-          // 如果无法提取结果，返回空结果
-          adaptedResult.results = [];
-        }
-
-        return adaptedResult;
-      }
+      progressCallback(`搜索完成，获取到 ${response.data.results.length} 条结果`, 'completed');
     }
 
     return response.data;
-  } catch (error) {
-    console.error("简单搜索请求失败:", error);
+  } catch (error: any) {
+    console.error("Tavily 搜索请求失败:", error);
     if (progressCallback) {
-      progressCallback(`简单搜索也失败了：${error instanceof Error ? error.message : '未知错误'}`, 'error');
+      progressCallback(`搜索失败：${error instanceof Error ? error.message : '未知错误'}`, 'error');
     }
     return null;
   }
 }
 
-// 格式化搜索结果为文本格式，供AI使用
-function formatSearchResultsForAI(results: SearxngResult | null): string {
+// 格式化Tavily搜索结果为文本格式，供AI使用
+function formatSearchResultsForAI(results: TavilyResult | null): string {
   if (!results || !results.results || results.results.length === 0) {
     return "未找到相关搜索结果。";
   }
 
-  // 取最多10条结果
-  const topResults = results.results.slice(0, 10);
+  const topResults = results.results;
 
   let formattedText = `以下是与"${results.query}"相关的最新搜索结果：\n\n`;
 
-  topResults.forEach((result, index) => {
-    // 添加来源查询信息
-    if (result.fromQuery && result.fromQuery !== results.query) {
-      formattedText += `[${index + 1}] ${result.title} (来自查询: "${result.fromQuery}")\n`;
-    } else {
-      formattedText += `[${index + 1}] ${result.title}\n`;
-    }
-
+  topResults.forEach((result: TavilySearchItem, index: number) => {
+    formattedText += `[${index + 1}] ${result.title}\n`;
     formattedText += `来源: ${result.url}\n`;
-
-    // 检查结果中是否有publishedDate字段
-    if (result.publishedDate) {
-      formattedText += `日期: ${result.publishedDate}\n`;
+    if (result.publish_date) {
+      formattedText += `日期: ${result.publish_date}\n`;
     }
-
-    // 添加类别信息（如果有）
-    if (result.category) {
-      formattedText += `类别: ${result.category}\n`;
-    }
-
-    // 添加搜索引擎信息
-    formattedText += `引擎: ${result.engine || (result.engines && result.engines.join(', '))}\n`;
-
-    // 添加内容/摘要
     formattedText += `摘要: ${result.content}\n\n`;
   });
 
@@ -533,8 +439,8 @@ export async function fetchTimelineData(
     let searchResults = null;
     let searchContext = "";
 
-    if (apiConfig.searxng?.enabled) {
-      searchResults = await searchWithSearxng(query, apiConfig, progressCallback);
+    if (apiConfig.tavily?.apiKey) {
+      searchResults = await performSearch(query, apiConfig, progressCallback);
       searchContext = formatSearchResultsForAI(searchResults);
       if (progressCallback) {
         progressCallback(
@@ -634,7 +540,7 @@ export async function fetchTimelineData(
     }
 
     return result;
-  } catch (error) {
+  } catch (error: any) {
     console.error("API request failed:", error);
     if (progressCallback) {
       progressCallback(`生成时间轴失败：${error instanceof Error ? error.message : '未知错误'}`, 'error');
@@ -664,8 +570,8 @@ export async function fetchEventDetails(
     let searchResults = null;
     let searchContext = "";
 
-    if (apiConfig.searxng?.enabled) {
-      searchResults = await searchWithSearxng(query, apiConfig, progressCallback);
+    if (apiConfig.tavily?.apiKey) {
+      searchResults = await performSearch(query, apiConfig, progressCallback);
       searchContext = formatSearchResultsForAI(searchResults);
       if (progressCallback) {
         progressCallback('事件详情搜索完成', 'completed');
@@ -754,7 +660,7 @@ export async function fetchEventDetails(
     }
 
     return content;
-  } catch (error) {
+  } catch (error: any) {
     console.error("API request failed:", error);
     if (progressCallback) {
       progressCallback(`获取事件详情失败：${error instanceof Error ? error.message : '未知错误'}`, 'error');
@@ -783,8 +689,8 @@ export async function fetchImpactAssessment(
     let searchResults = null;
     let searchContext = "";
 
-    if (apiConfig.searxng?.enabled) {
-      searchResults = await searchWithSearxng(query, apiConfig, progressCallback);
+    if (apiConfig.tavily?.apiKey) {
+      searchResults = await performSearch(query, apiConfig, progressCallback);
       searchContext = formatSearchResultsForAI(searchResults);
       if (progressCallback) {
         progressCallback('影响评估数据搜索完成', 'completed');
@@ -865,7 +771,7 @@ export async function fetchImpactAssessment(
     }
 
     return content;
-  } catch (error) {
+  } catch (error: any) {
     console.error("Impact assessment API request failed:", error);
     if (progressCallback) {
       progressCallback(`获取影响评估失败：${error instanceof Error ? error.message : '未知错误'}`, 'error');

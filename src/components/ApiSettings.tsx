@@ -1,5 +1,6 @@
 "use client";
 
+import React from 'react';
 import { useState, useEffect } from 'react';
 import { useApi } from '@/contexts/ApiContext';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
@@ -10,7 +11,7 @@ import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Checkbox } from '@/components/ui/checkbox';
-import type { SearxngConfig } from '@/types';
+import type { TavilyConfig } from '@/types';
 
 interface ApiSettingsProps {
   open: boolean;
@@ -41,24 +42,8 @@ export function ApiSettings({ open, onOpenChange }: ApiSettingsProps) {
   const [isMounted, setIsMounted] = useState(false);
   const [isEnvConfigActive, setIsEnvConfigActive] = useState(useEnvConfig);
 
-  // 可用的搜索引擎分类
-  const engineCategories = {
-    '通用搜索': ['google', 'bing', 'brave', 'duckduckgo', 'baidu', 'yandex'],
-    '新闻': ['google news', 'bing news', 'baidu news', 'duckduckgo news'],
-    '学术': ['google scholar', 'semantic scholar', 'base', 'microsoft academic'],
-    '百科': ['wikipedia', 'wikidata'],
-    '社交媒体': ['reddit', 'twitter', 'youtube']
-  };
-
-  // SearXNG配置状态，默认选择所有通用搜索和新闻引擎
-  const [searxngConfig, setSearxngConfig] = useState<SearxngConfig>({
-    url: 'https://sousuo.emoe.top',
-    enabled: true,
-    categories: 'general,news',
-    language: 'zh',
-    timeRange: 'year',
-    numResults: 5,
-    engines: [...engineCategories['通用搜索'], ...engineCategories['新闻']]
+  const [tavilyConfig, setTavilyConfig] = useState<TavilyConfig>({
+    apiKey: '',
   });
 
   // 当前选中的设置标签
@@ -99,38 +84,9 @@ export function ApiSettings({ open, onOpenChange }: ApiSettingsProps) {
       setPasswordError('');
       setError('');
 
-      // 更新效果，初始化SearXNG配置
-      // Respect auto-enabling/disabling when environment variable is set
-      let effectiveSearxng: SearxngConfig = {
-        url: 'https://sousuo.emoe.top',
-        enabled: true,
-        categories: 'general,news',
-        language: 'zh',
-        timeRange: 'year',
-        numResults: 5,
-        engines: [...engineCategories['通用搜索'], ...engineCategories['新闻']]
-      };
-
-      if (apiConfig.searxng) {
-        effectiveSearxng = {
-          url: apiConfig.searxng.url || 'https://sousuo.emoe.top',
-          enabled: typeof apiConfig.searxng.enabled === 'boolean' ? apiConfig.searxng.enabled : true,
-          categories: apiConfig.searxng.categories || 'general,news',
-          language: apiConfig.searxng.language || 'zh',
-          timeRange: apiConfig.searxng.timeRange || 'year',
-          numResults: apiConfig.searxng.numResults || 5,
-          engines: apiConfig.searxng.engines && apiConfig.searxng.engines.length > 0
-            ? apiConfig.searxng.engines
-            : [...engineCategories['通用搜索'], ...engineCategories['新闻']]
-        };
+      if (apiConfig.tavily) {
+        setTavilyConfig(apiConfig.tavily);
       }
-
-      // 如果环境变量配置有 SearXNG 并且 enabled 字段为 false，则禁用
-      if (useEnvConfig && hasEnvConfig && apiConfig.searxng && typeof apiConfig.searxng.enabled === 'boolean') {
-        effectiveSearxng.enabled = apiConfig.searxng.enabled;
-      }
-
-      setSearxngConfig(effectiveSearxng);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [apiConfig, open, useEnvConfig, hasEnvConfig]);
@@ -163,94 +119,11 @@ export function ApiSettings({ open, onOpenChange }: ApiSettingsProps) {
     setError('');
   };
 
-  // 引擎选择处理函数
-  const handleEngineChange = (engine: string, checked: boolean) => {
-    setSearxngConfig(prev => {
-      const engines = prev.engines || [];
-      if (checked) {
-        return { ...prev, engines: [...engines, engine] };
-      } else {
-        return { ...prev, engines: engines.filter(e => e !== engine) };
-      }
-    });
-  };
-
-  // 选择引擎类别中的所有引擎
-  const selectCategoryEngines = (category: string, checked: boolean) => {
-    const categoryEngines = engineCategories[category as keyof typeof engineCategories] || [];
-    setSearxngConfig(prev => {
-      const currentEngines = prev.engines || [];
-      if (checked) {
-        const newEngines = [...currentEngines];
-        categoryEngines.forEach(engine => {
-          if (!newEngines.includes(engine)) {
-            newEngines.push(engine);
-          }
-        });
-        return { ...prev, engines: newEngines };
-      } else {
-        return {
-          ...prev,
-          engines: currentEngines.filter(engine => !categoryEngines.includes(engine))
-        };
-      }
-    });
-  };
-
-  // 检查类别中的引擎是否全部被选中
-  const isCategorySelected = (category: string) => {
-    const engines = searxngConfig.engines || [];
-    const categoryEngines = engineCategories[category as keyof typeof engineCategories] || [];
-    return categoryEngines.every(engine => engines.includes(engine));
-  };
-
-  // 检查类别中是否有部分引擎被选中
-  const isCategoryIndeterminate = (category: string) => {
-    const engines = searxngConfig.engines || [];
-    const categoryEngines = engineCategories[category as keyof typeof engineCategories] || [];
-    const hasSelected = categoryEngines.some(engine => engines.includes(engine));
-    return hasSelected && !isCategorySelected(category);
-  };
-
-  // 更新SearXNG配置
-  const handleSearxngChange = (key: keyof SearxngConfig, value: string | boolean | number | string[]) => {
-    setSearxngConfig(prev => ({
+  const handleTavilyChange = (key: keyof TavilyConfig, value: string) => {
+    setTavilyConfig((prev: TavilyConfig) => ({
       ...prev,
       [key]: value
     }));
-  };
-
-  // 测试SearXNG连接
-  const testSearxngConnection = async () => {
-    if (!searxngConfig.url) {
-      setError('SearXNG URL不能为空');
-      return;
-    }
-
-    try {
-      setError('正在测试连接...');
-
-      const response = await fetch('/api/search', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          query: 'test',
-          searxngUrl: searxngConfig.url
-        }),
-      });
-
-      if (response.ok) {
-        setError('SearXNG连接测试成功！');
-        setTimeout(() => setError(''), 3000);
-      } else {
-        const data = await response.json();
-        setError(`SearXNG连接测试失败: ${data.message || '未知错误'}`);
-      }
-    } catch (err) {
-      setError(`SearXNG连接测试失败: ${err instanceof Error ? err.message : '未知错误'}`);
-    }
   };
 
   // 更新保存函数以包含SearXNG配置
@@ -263,7 +136,7 @@ export function ApiSettings({ open, onOpenChange }: ApiSettingsProps) {
     if (isEnvConfigActive && hasEnvConfig) {
       // 确保保存SearXNG配置的同时也更新环境变量配置选择
       updateApiConfig({
-        searxng: searxngConfig
+        tavily: tavilyConfig
       });
 
       // 确保两边设置都是同步的
@@ -298,11 +171,6 @@ export function ApiSettings({ open, onOpenChange }: ApiSettingsProps) {
       return;
     }
 
-    if (searxngConfig.enabled && !searxngConfig.url) {
-      setActiveTab('searxng');
-      setError('SearXNG URL不能为空');
-      return;
-    }
 
     setError('');
 
@@ -310,7 +178,7 @@ export function ApiSettings({ open, onOpenChange }: ApiSettingsProps) {
       endpoint: endpoint.trim(),
       model: model.trim(),
       apiKey: apiKey.trim(),
-      searxng: searxngConfig
+      tavily: tavilyConfig
     });
 
     // 确保两边设置都是同步的
@@ -379,11 +247,11 @@ export function ApiSettings({ open, onOpenChange }: ApiSettingsProps) {
                     <Input
                       id="password"
                       value={password}
-                      onChange={(e) => setPassword(e.target.value)}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPassword(e.target.value)}
                       placeholder="请输入访问密码"
                       type="password"
                       className="rounded-lg"
-                      onKeyDown={(e) => e.key === 'Enter' && handlePasswordSubmit()}
+                      onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => e.key === 'Enter' && handlePasswordSubmit()}
                     />
                     {passwordError && (
                       <div className="text-sm text-red-500 mt-2 p-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/50 rounded-lg">
@@ -398,7 +266,7 @@ export function ApiSettings({ open, onOpenChange }: ApiSettingsProps) {
                 <Tabs value={activeTab} onValueChange={setActiveTab}>
                   <TabsList className="w-full">
                     <TabsTrigger value="api" className="flex-1">API设置</TabsTrigger>
-                    <TabsTrigger value="searxng" className="flex-1">搜索设置</TabsTrigger>
+                    <TabsTrigger value="search" className="flex-1">搜索设置</TabsTrigger>
                   </TabsList>
 
                   <TabsContent value="api" className="mt-4">
@@ -434,7 +302,7 @@ export function ApiSettings({ open, onOpenChange }: ApiSettingsProps) {
                             <Input
                               id="endpoint"
                               value={endpoint}
-                              onChange={(e) => setEndpoint(e.target.value)}
+                              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEndpoint(e.target.value)}
                               placeholder="例如: https://example.com/v1/chat/completions"
                               className="sm:col-span-3 rounded-lg"
                               disabled={!allowUserConfig || (isEnvConfigActive && hasEnvConfig)}
@@ -447,7 +315,7 @@ export function ApiSettings({ open, onOpenChange }: ApiSettingsProps) {
                             <Input
                               id="model"
                               value={model}
-                              onChange={(e) => setModel(e.target.value)}
+                              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setModel(e.target.value)}
                               placeholder="例如: gemini-2.0-pro-exp-search"
                               className="sm:col-span-3 rounded-lg"
                               disabled={!allowUserConfig || (isEnvConfigActive && hasEnvConfig)}
@@ -460,7 +328,7 @@ export function ApiSettings({ open, onOpenChange }: ApiSettingsProps) {
                             <Input
                               id="api-key"
                               value={apiKey}
-                              onChange={(e) => setApiKey(e.target.value)}
+                              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setApiKey(e.target.value)}
                               placeholder="请输入API密钥"
                               type="password"
                               className="sm:col-span-3 rounded-lg"
@@ -481,172 +349,22 @@ export function ApiSettings({ open, onOpenChange }: ApiSettingsProps) {
                     )}
                   </TabsContent>
 
-                  <TabsContent value="searxng" className="mt-4">
+                  <TabsContent value="search" className="mt-4">
                     <div className="space-y-4">
-                      <div className="flex items-center justify-between p-3 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800/50">
-                        <div className="flex flex-col">
-                          <label htmlFor="enable-searxng" className="font-medium text-blue-800 dark:text-blue-200">
-                            启用SearXNG搜索
-                          </label>
-                          <span className="text-sm text-blue-600 dark:text-blue-300">
-                            使用SearXNG引擎获取最新信息
-                          </span>
-                        </div>
-                        <Switch
-                          id="enable-searxng"
-                          checked={searxngConfig.enabled}
-                          onCheckedChange={(checked) => handleSearxngChange('enabled', checked)}
+                      <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-2 sm:gap-4 mt-2">
+                        <Label htmlFor="tavily-api-key" className="sm:text-right">
+                          Tavily API 密钥
+                        </Label>
+                        <Input
+                          id="tavily-api-key"
+                          value={tavilyConfig.apiKey}
+                          onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleTavilyChange('apiKey', e.target.value)}
+                          placeholder="请输入Tavily API密钥"
+                          type="password"
+                          className="sm:col-span-3 rounded-lg"
+                          autoComplete="off"
                         />
                       </div>
-
-                      <div className={!searxngConfig.enabled ? "opacity-50" : ""}>
-                        <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-2 sm:gap-4 mt-2">
-                          <Label htmlFor="searxng-url" className="sm:text-right">
-                            SearXNG URL
-                          </Label>
-                          <div className="sm:col-span-3">
-                            <Input
-                              id="searxng-url"
-                              value={searxngConfig.url}
-                              onChange={(e) => handleSearxngChange('url', e.target.value)}
-                              placeholder="例如: https://sousuo.emoe.top"
-                              className="rounded-lg mb-2"
-                              disabled={!searxngConfig.enabled}
-                            />
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={testSearxngConnection}
-                              disabled={!searxngConfig.enabled || !searxngConfig.url}
-                              className="w-full rounded-full"
-                            >
-                              测试连接
-                            </Button>
-                          </div>
-                        </div>
-
-                        <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-2 sm:gap-4 mt-2">
-                          <Label htmlFor="searxng-categories" className="sm:text-right">
-                            搜索分类
-                          </Label>
-                          <Input
-                            id="searxng-categories"
-                            value={searxngConfig.categories}
-                            onChange={(e) => handleSearxngChange('categories', e.target.value)}
-                            placeholder="例如: general,news"
-                            className="sm:col-span-3 rounded-lg"
-                            disabled={!searxngConfig.enabled}
-                          />
-                        </div>
-
-                        <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-2 sm:gap-4 mt-2">
-                          <Label htmlFor="searxng-language" className="sm:text-right">
-                            搜索语言
-                          </Label>
-                          <Input
-                            id="searxng-language"
-                            value={searxngConfig.language}
-                            onChange={(e) => handleSearxngChange('language', e.target.value)}
-                            placeholder="例如: zh"
-                            className="sm:col-span-3 rounded-lg"
-                            disabled={!searxngConfig.enabled}
-                          />
-                        </div>
-
-                        <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-2 sm:gap-4 mt-2">
-                          <Label htmlFor="searxng-time-range" className="sm:text-right">
-                            时间范围
-                          </Label>
-                          <Input
-                            id="searxng-time-range"
-                            value={searxngConfig.timeRange}
-                            onChange={(e) => handleSearxngChange('timeRange', e.target.value)}
-                            placeholder="例如: year, month, week"
-                            className="sm:col-span-3 rounded-lg"
-                            disabled={!searxngConfig.enabled}
-                          />
-                        </div>
-
-                        <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-2 sm:gap-4 mt-2">
-                          <Label htmlFor="searxng-num-results" className="sm:text-right">
-                            结果数量
-                          </Label>
-                          <Input
-                            id="searxng-num-results"
-                            type="number"
-                            min="1"
-                            max="20"
-                            value={searxngConfig.numResults}
-                            onChange={(e) => handleSearxngChange('numResults', Number.parseInt(e.target.value) || 5)}
-                            placeholder="例如: 5"
-                            className="sm:col-span-3 rounded-lg"
-                            disabled={!searxngConfig.enabled}
-                          />
-                        </div>
-
-                        <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-top gap-2 sm:gap-4 mt-4">
-                          <Label className="sm:text-right mt-2">
-                            搜索引擎选择
-                          </Label>
-                          <div className="sm:col-span-3">
-                            <div className="text-sm mb-2">选择要使用的搜索引擎，不选择则使用默认引擎</div>
-                            <ScrollArea className="h-[180px] rounded-md border p-4">
-                              <div className="space-y-4">
-                                {Object.keys(engineCategories).map((category) => (
-                                  <div key={category} className="space-y-2">
-                                    <div className="flex items-center space-x-2">
-                                      <Checkbox
-                                        id={`category-${category}`}
-                                        checked={isCategorySelected(category)}
-                                        onCheckedChange={(checked) =>
-                                          selectCategoryEngines(category, checked === true)
-                                        }
-                                        disabled={!searxngConfig.enabled}
-                                      />
-                                      <label
-                                        htmlFor={`category-${category}`}
-                                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                                      >
-                                        {category}
-                                      </label>
-                                    </div>
-                                    <div className="ml-6 space-y-1">
-                                      {engineCategories[category as keyof typeof engineCategories].map((engine) => (
-                                        <div key={engine} className="flex items-center space-x-2">
-                                          <Checkbox
-                                            id={`engine-${engine}`}
-                                            checked={(searxngConfig.engines || []).includes(engine)}
-                                            onCheckedChange={(checked) =>
-                                              handleEngineChange(engine, checked === true)
-                                            }
-                                            disabled={!searxngConfig.enabled}
-                                          />
-                                          <label
-                                            htmlFor={`engine-${engine}`}
-                                            className="text-sm leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                                          >
-                                            {engine}
-                                          </label>
-                                        </div>
-                                      ))}
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            </ScrollArea>
-                            <div className="mt-2 text-xs text-muted-foreground">
-                              提示: 选择特定引擎可提高搜索针对性，但可能降低结果覆盖面
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      {!searxngConfig.enabled && (
-                        <div className="text-sm text-blue-600 bg-blue-50 dark:bg-blue-900/20 dark:text-blue-300 p-3 rounded-lg border border-blue-200 dark:border-blue-800/50 mt-2">
-                          启用SearXNG搜索可以让AI获取最新的信息，提供更准确的回答。
-                        </div>
-                      )}
                     </div>
                   </TabsContent>
                 </Tabs>

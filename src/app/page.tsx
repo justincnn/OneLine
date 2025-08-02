@@ -19,8 +19,6 @@ import {
 import type { TimelineData, TimelineEvent, DateFilterOption, DateFilterConfig } from '@/types';
 import { fetchTimelineData, fetchEventDetails, fetchImpactAssessment, type ProgressCallback, type StreamCallback } from '@/lib/api';
 import { SearchProgress, type SearchProgressStep } from '@/components/SearchProgress';
-import { BaiduHotList } from '@/components/BaiduHotList';
-import { HotSearchDropdown } from '@/components/HotSearchDropdown';
 import { SearchHistory, type SearchHistoryItem } from '@/components/SearchHistory';
 import { toast } from 'sonner';
 import { Settings, SortDesc, SortAsc, Download, Search, ChevronDown, Flame, FileText } from 'lucide-react';
@@ -72,9 +70,6 @@ function MainContent() {
   const [searchProgressSteps, setSearchProgressSteps] = useState<SearchProgressStep[]>([]);
   const [searchProgressActive, setSearchProgressActive] = useState(false);
 
-  const [showHotList, setShowHotList] = useState(false);
-  const [showHotSearch, setShowHotSearch] = useState(true);
-  const [flyingHotItem, setFlyingHotItem] = useState<{ title: string, startX: number, startY: number } | null>(null);
 
   // Search history related states
   const [searchHistory, setSearchHistory] = useState<SearchHistoryItem[]>([]);
@@ -196,51 +191,6 @@ function MainContent() {
     }
   };
 
-  const handleHotItemClick = (title: string) => {
-    if (title.trim() === query.trim() && timelineData.events.length > 0 && timelineVisible) {
-      console.log("跳过相同热搜项点击:", title);
-      setShowHotList(false);
-      setShowHotSearch(false);
-      setShowSearchHistory(false);
-      return;
-    }
-
-    const hotItems = document.querySelectorAll('.hot-item');
-    let startX = 0;
-    let startY = 0;
-
-    hotItems.forEach((item) => {
-      if (item.textContent?.includes(title)) {
-        const rect = item.getBoundingClientRect();
-        startX = rect.left + rect.width / 2;
-        startY = rect.top + rect.height / 2;
-      }
-    });
-
-    lastSearchQuery.current = title.trim();
-
-    // Save the hot item to search history
-    saveSearchToHistory(title);
-
-    setFlyingHotItem({ title, startX, startY });
-
-    setTimeout(() => {
-      setQuery(title);
-      setShowHotList(false);
-      setFlyingHotItem(null);
-      setShowHotSearch(false);
-      setShowSearchHistory(false);
-
-      setTimeout(() => {
-        if (inputRef.current) {
-          const form = inputRef.current.form;
-          if (form) {
-            form.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
-          }
-        }
-      }, 300);
-    }, 600);
-  };
 
   useEffect(() => {
     const handleScroll = () => {
@@ -319,40 +269,6 @@ function MainContent() {
     }
   }, [timelineData.events.length, timelineVisible]);
 
-  useEffect(() => {
-    if (flyingHotItem && inputRef.current) {
-      const inputRect = inputRef.current.getBoundingClientRect();
-      const inputCenterX = inputRect.left + inputRect.width / 2;
-      const inputCenterY = inputRect.top + inputRect.height / 2;
-
-      const flyX = inputCenterX - flyingHotItem.startX;
-      const flyY = inputCenterY - flyingHotItem.startY;
-
-      document.documentElement.style.setProperty('--fly-x', `${flyX}px`);
-      document.documentElement.style.setProperty('--fly-y', `${flyY}px`);
-    }
-  }, [flyingHotItem]);
-
-  useEffect(() => {
-    if (!query.trim()) {
-      setShowHotSearch(true);
-      setShowSearchHistory(false);
-    }
-  }, [query]);
-
-  useEffect(() => {
-    if (query.trim()) {
-      setShowHotSearch(false);
-      setShowSearchHistory(false);
-    }
-  }, [query]);
-
-  useEffect(() => {
-    if (timelineVisible && timelineData.events.length > 0) {
-      setShowHotSearch(false);
-      setShowSearchHistory(false);
-    }
-  }, [timelineVisible, timelineData.events.length]);
 
   // 处理提取到的事件概括
   const handleSummaryExtracted = (summary: string) => {
@@ -435,8 +351,6 @@ function MainContent() {
     // Save search query to history
     saveSearchToHistory(query);
 
-    setShowHotList(false);
-    setShowHotSearch(false);
     setShowSearchHistory(false);
 
     setSearchProgressSteps([]);
@@ -803,9 +717,6 @@ function MainContent() {
     });
   };
 
-  const toggleHotList = () => {
-    setShowHotList(prev => !prev);
-  };
 
   // Handle a click on a history item
   const handleHistoryItemClick = (queryText: string) => {
@@ -869,7 +780,7 @@ function MainContent() {
           <div className="flex flex-col items-center mb-8 animate-slide-down">
             <h1 className="text-4xl md:text-5xl font-bold mb-4 text-center page-title">一线</h1>
             <p className="text-lg md:text-xl text-muted-foreground mb-8 text-center max-w-xl mx-auto">
-              AI驱动的热点事件时间轴 · 洞察历史脉络
+              客户、产品最新情景信息
             </p>
           </div>
         )}
@@ -886,7 +797,6 @@ function MainContent() {
               onFocus={(e) => {
                 e.stopPropagation();
                 setShowSearchHistory(true);
-                // 不关闭热搜榜，历史和热搜可同时显示
               }}
               onBlur={() => {
                 // Add a small delay before hiding search history to allow for clicks on history items
@@ -968,11 +878,6 @@ function MainContent() {
               historyItems={searchHistory}
               onSelectHistoryItem={handleHistoryItemClick}
             />
-            <HotSearchDropdown
-              visible={searchPosition === 'center' && showHotSearch && !isLoading}
-              onSelectHotItem={handleHotItemClick}
-              hasSearchResults={timelineData.events.length > 0}
-            />
           </div>
         </div>
       </form>
@@ -987,24 +892,6 @@ function MainContent() {
         />
       </div>
 
-      <BaiduHotList
-        visible={showHotList}
-        onClose={() => setShowHotList(false)}
-        onSelectHotItem={handleHotItemClick}
-      />
-
-      {flyingHotItem && (
-        <div
-          className="fixed z-50 fly-to-input bg-primary text-primary-foreground px-3 py-1.5 rounded-full text-sm font-medium"
-          style={{
-            left: flyingHotItem.startX,
-            top: flyingHotItem.startY,
-            transform: 'translate(-50%, -50%)'
-          }}
-        >
-          {flyingHotItem.title}
-        </div>
-      )}
 
       {/* Split impact analysis and timeline */}
       <div className="flex-1 pt-16 pb-12 px-2 sm:px-4 md:px-8 w-full max-w-6xl mx-auto">

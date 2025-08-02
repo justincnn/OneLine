@@ -2,8 +2,8 @@
 
 import type React from 'react';
 import { createContext, useContext, useState, useEffect } from 'react';
-import type { ApiConfig, SearxngConfig } from '@/types';
-import { getEnvApiEndpoint, getEnvApiKey, getEnvApiModel, isUserConfigAllowed, getEnvAccessPassword, getEnvConfigStatus, getEnvSearxngUrl, getEnvSearxngEnabled } from '@/lib/env';
+import type { ApiConfig, TavilyConfig } from '@/types';
+import { getEnvApiEndpoint, getEnvApiKey, getEnvApiModel, isUserConfigAllowed, getEnvAccessPassword, getEnvConfigStatus } from '@/lib/env';
 
 interface ApiContextType {
   apiConfig: ApiConfig;
@@ -25,13 +25,8 @@ const defaultApiConfig: ApiConfig = {
   apiKey: '',
   allowUserConfig: true,
   accessPassword: '',
-  searxng: {
-    url: 'https://sousuo.emoe.top',
-    enabled: false,
-    categories: 'general',
-    language: 'zh',
-    timeRange: 'year',
-    numResults: 5
+  tavily: {
+    apiKey: '',
   }
 };
 
@@ -74,8 +69,6 @@ export function ApiProvider({ children }: { children: React.ReactNode }) {
       const envModel = getEnvApiModel();
       const envApiKey = getEnvApiKey();
       const envAccessPassword = getEnvAccessPassword();
-      const envSearxngUrl = getEnvSearxngUrl();
-      const envSearxngEnabled = getEnvSearxngEnabled();
 
       // 使用新函数getEnvConfigStatus来获取环境变量配置状态
       const hasServerConfig = getEnvConfigStatus();
@@ -86,9 +79,7 @@ export function ApiProvider({ children }: { children: React.ReactNode }) {
         envEndpoint: envEndpoint ? '已设置' : '未设置',
         envApiKey: envApiKey ? '已设置' : '未设置',
         isClientSide: typeof window !== 'undefined',
-        envConfigStatus: process.env.NEXT_PUBLIC_HAS_SERVER_CONFIG,
-        envSearxngUrl: envSearxngUrl ? '已设置' : '未设置',
-        envSearxngEnabled
+        envConfigStatus: process.env.NEXT_PUBLIC_HAS_SERVER_CONFIG
       });
 
       // 设置是否启用密码保护
@@ -125,7 +116,7 @@ export function ApiProvider({ children }: { children: React.ReactNode }) {
               apiKey: parsedConfig.apiKey || '',
               allowUserConfig: userConfigAllowed,
               accessPassword: envAccessPassword || '',
-              searxng: parsedConfig.searxng || defaultApiConfig.searxng
+              tavily: parsedConfig.tavily || defaultApiConfig.tavily
             };
           } catch (e) {
             console.error('Failed to parse stored config:', e);
@@ -156,14 +147,8 @@ export function ApiProvider({ children }: { children: React.ReactNode }) {
           apiKey: "使用环境变量配置",
           allowUserConfig: userConfigAllowed,
           accessPassword: envAccessPassword || '',
-          searxng: {
-            url: envSearxngUrl || 'https://sousuo.emoe.top',
-            // 如果NEXT_PUBLIC_SEARXNG_URL已设置，则自动启用SearXNG，即使NEXT_PUBLIC_SEARXNG_ENABLED未设置
-            enabled: envSearxngEnabled || (!!envSearxngUrl && envSearxngUrl.trim() !== ''),
-            categories: 'general',
-            language: 'zh',
-            timeRange: 'year',
-            numResults: 5
+          tavily: {
+            apiKey: "使用环境变量配置"
           }
         };
         setIsConfigured(true); // 环境变量配置被视为已配置
@@ -197,16 +182,17 @@ export function ApiProvider({ children }: { children: React.ReactNode }) {
     if (use && hasEnvConfig) {
       // 切换到环境变量配置，但不显示具体信息
       setApiConfig(prev => {
-        // 保留searxng配置，避免丢失用户自定义的搜索设置
         const updatedConfig = {
           ...prev,
           endpoint: "使用环境变量配置",
           model: "使用环境变量配置",
           apiKey: "使用环境变量配置",
+          tavily: {
+            apiKey: "使用环境变量配置"
+          }
         };
 
-        // 更新用户配置以防再次切换回来，保留之前的searxng配置
-        setUserConfig(userConfig ? { ...userConfig, searxng: prev.searxng } : prev);
+        setUserConfig(userConfig ? { ...userConfig, tavily: prev.tavily } : prev);
 
         return updatedConfig;
       });
@@ -231,7 +217,7 @@ export function ApiProvider({ children }: { children: React.ReactNode }) {
       }
     }
 
-    setApiConfig(prev => {
+    setApiConfig((prev: ApiConfig) => {
       const newConfig = { ...prev, ...config };
 
       // 保存新配置作为用户配置
