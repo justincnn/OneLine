@@ -1,26 +1,29 @@
-# Use an official Node.js runtime as a parent image
-FROM node:18-alpine
+# build stage
+FROM oven/bun:1 as build
 
-# Set the working directory
 WORKDIR /app
 
-# Copy package.json and bun.lockb
+# install dependencies
 COPY package.json bun.lock ./
-
-# Install Bun
-RUN npm install -g bun
-
-# Install dependencies
 RUN bun install --frozen-lockfile
 
-# Copy the rest of the application code
+# copy app files
 COPY . .
 
-# Build the app
+# build app
 RUN bun run build
 
-# Expose port 3000
+# final image
+FROM oven/bun:1-alpine
+
+WORKDIR /app
+
+COPY --from=build /app/package.json .
+COPY --from=build /app/bun.lock .
+COPY --from=build /app/public ./public
+COPY --from=build /app/.next ./.next
+COPY --from=build /app/node_modules ./node_modules
+
 EXPOSE 3000
 
-# Command to run the app
 CMD ["bun", "run", "start"]
