@@ -17,7 +17,7 @@ import {
   SelectTrigger,
   SelectValue
 } from '@/components/ui/select';
-import type { TimelineData, TimelineEvent, DateFilterOption, DateFilterConfig } from '@/types';
+import type { TimelineData, TimelineEvent, DateFilterOption, DateFilterConfig, ECommerceMode } from '@/types';
 import { fetchTimelineData, fetchEventDetails, fetchImpactAssessment, scrapeWebsite, type ProgressCallback, type StreamCallback } from '@/lib/api';
 import { SearchProgress, type SearchProgressStep } from '@/components/SearchProgress';
 import { SearchHistory, type SearchHistoryItem } from '@/components/SearchHistory';
@@ -52,7 +52,7 @@ function MainContent() {
   const [companyName, setCompanyName] = useState('');
   const [website, setWebsite] = useState('');
   const [mainProducts, setMainProducts] = useState('');
-  const [isECommerce, setIsECommerce] = useState(false);
+  const [isECommerce, setIsECommerce] = useState<ECommerceMode>('notECommerce');
   const [additionalInfo, setAdditionalInfo] = useState('');
   const [query, setQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -332,7 +332,13 @@ function MainContent() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    const generatedQuery = `公司名: ${companyName}, 网址: ${website}, 主营产品: ${mainProducts}, 是否电商客户: ${isECommerce ? '是' : '否'}`;
+    const eCommerceText = {
+      notECommerce: '否',
+      b2c: 'B2C跨境',
+      b2b: 'B2B跨境',
+      both: 'B2C和B2B'
+    };
+    const generatedQuery = `公司名: ${companyName}, 网址: ${website}, 主营产品: ${mainProducts}, 是否电商客户: ${eCommerceText[isECommerce]}`;
     setQuery(generatedQuery);
 
     if (!companyName.trim() && !mainProducts.trim()) {
@@ -486,7 +492,8 @@ function MainContent() {
             progressCallback('正在生成事件时间轴', 'pending');
           }
 
-          const data = await fetchTimelineData(queryWithDateFilter, apiConfig, progressCallback, streamCallback);
+          const queries = queryWithDateFilter.split('; ').filter(q => q.trim() !== '');
+          const data = await fetchTimelineData(queries, apiConfig, progressCallback, streamCallback, isECommerce, { startDate: dateFilter.startDate, endDate: dateFilter.endDate });
           setTimelineData(data);
 
           if (searchStartTime) {
@@ -543,8 +550,8 @@ function MainContent() {
 
   const generateImpactQuery = (): string => {
     let impactQuery = `该公司（${companyName}）的行业（主要针对其产品：${mainProducts}）最近发生了什么？该公司最近发生了什么？`;
-    if (isECommerce) {
-      impactQuery += ` 如果是电商，其客户的产品最近在跨境电商领域的竞争和趋势如何？`;
+    if (isECommerce !== 'notECommerce') {
+      impactQuery += ` 如果是电商（模式: ${isECommerce}），其客户的产品最近在跨境电商领域的竞争和趋势如何？`;
     }
     return impactQuery;
   };
@@ -775,7 +782,13 @@ function MainContent() {
     setShowProductConfirmation(false);
     
     // Update query with confirmed products before fetching data
-    const updatedQuery = `公司名: ${companyName}, 网址: ${website}, 主营产品: ${confirmedProducts.join(', ')}, 是否电商客户: ${isECommerce ? '是' : '否'}`;
+    const eCommerceText = {
+      notECommerce: '否',
+      b2c: 'B2C跨境',
+      b2b: 'B2B跨境',
+      both: 'B2C和B2B'
+    };
+    const updatedQuery = `公司名: ${companyName}, 网址: ${website}, 主营产品: ${confirmedProducts.join(', ')}, 是否电商客户: ${eCommerceText[isECommerce]}`;
     setQuery(updatedQuery);
     lastSearchQuery.current = updatedQuery.trim();
 
@@ -810,7 +823,7 @@ function MainContent() {
     setCompanyName('');
     setWebsite('');
     setMainProducts('');
-    setIsECommerce(false);
+    setIsECommerce('notECommerce');
     setAdditionalInfo('');
     setQuery('');
     setTimelineData({ events: [] });
@@ -900,13 +913,18 @@ function MainContent() {
                 className="w-full border-0 bg-transparent focus-visible:ring-0 placeholder:text-muted-foreground/70 text-sm sm:text-base h-8 sm:h-10"
               />
               <div className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  id="isECommerce"
-                  checked={isECommerce}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setIsECommerce(e.target.checked)}
-                />
-                <label htmlFor="isECommerce">是否电商客户</label>
+                <label htmlFor="isECommerce" className="text-sm">电商模式:</label>
+                <Select value={isECommerce} onValueChange={(value: ECommerceMode) => setIsECommerce(value)}>
+                  <SelectTrigger className="w-auto border-0 bg-transparent focus:ring-0">
+                    <SelectValue placeholder="选择电商模式" />
+                  </SelectTrigger>
+                  <SelectContent className="glass-card border-0">
+                    <SelectItem value="notECommerce">非电商</SelectItem>
+                    <SelectItem value="b2c">B2C跨境</SelectItem>
+                    <SelectItem value="b2b">B2B跨境</SelectItem>
+                    <SelectItem value="both">B2C和B2B</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               <Input
                 type="text"

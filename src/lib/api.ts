@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { type ApiConfig, type TimelineData, TimelineEvent, type Person, type TavilyResult, type TavilySearchItem } from '@/types';
+import { type ApiConfig, type TimelineData, TimelineEvent, type Person, type TavilyResult, type TavilySearchItem, ECommerceMode } from '@/types';
 import { enhancedSearch } from './searchEnhancer';
 
 // 设置API请求的总超时时间，避免超出Netlify限制
@@ -10,13 +10,18 @@ export type StreamCallback = (chunk: string, isDone: boolean) => void;
 
 // 修改系统提示，使用分段文本格式而不是JSON
 const SYSTEM_PROMPT = `
-你是一个专业的历史事件分析助手。我需要你将热点事件以时间轴的方式呈现。
-在回答问题前，你将获得搜索引擎的最新信息，请使用这些信息来确保你的回答是基于最新的事实。
+你是一个专业的商业和市场分析助手。你需要根据用户提供的多个领域的搜索结果，整合信息并生成一个全面的时间轴。
+
+你将收到针对不同方面的搜索结果，例如“公司动态”、“产品与市场”等。你的任务是：
+1. **综合分析**：理解每个搜索结果集的上下文。
+2. **识别关键事件**：从所有信息中提取最重要的事件、趋势和里程碑。
+3. **消除重复**：如果多个来源报道了同一事件，请整合信息，提供一个全面而简洁的描述。
+4. **构建统一时间轴**：将所有识别出的事件按时间顺序排列。
 
 请按照以下格式返回数据（使用文本分段格式，不要使用JSON）：
 
 ===总结===
-对整个事件的简短总结，主要涵盖事件的起因、经过和目前状态。总结应该客观、准确，避免主观评价。请尽可能包含精确的日期、人物和地点信息。
+对所有信息的综合性总结。首先总结公司层面的主要动态，然后总结产品和市场的核心趋势，最后将两者联系起来，给出一个整体性的分析。
 
 ===事件列表===
 
@@ -350,7 +355,9 @@ export type ProgressCallback = (message: string, status: 'pending' | 'completed'
 export async function performSearch(
   query: string,
   apiConfig: ApiConfig,
-  progressCallback?: ProgressCallback
+  progressCallback?: ProgressCallback,
+  eCommerceMode: ECommerceMode = 'notECommerce',
+  dateRange?: { startDate?: Date; endDate?: Date }
 ): Promise<TavilyResult | null> {
   try {
     if (!apiConfig.tavily?.apiKey) {
@@ -365,10 +372,20 @@ export async function performSearch(
     }
 
     const apiUrl = '/api/search';
+    const excludeDomains = [];
+    if (eCommerceMode === 'b2c' || eCommerceMode === 'both') {
+      // Exclude B2B platforms for B2C searches
+    }
+    if (eCommerceMode === 'b2b' || eCommerceMode === 'both') {
+      // Exclude B2C platforms for B2B searches
+      excludeDomains.push('alibaba.com', 'tradekey.com');
+    }
+
     const payload = {
-      query,
+      query: dateRange ? `${query} after:${dateRange.startDate?.toISOString().split('T')[0]} before:${dateRange.endDate?.toISOString().split('T')[0]}` : query,
       apiKey: apiConfig.tavily.apiKey,
       max_results: apiConfig.tavily.maxResults || 7,
+      exclude_domains: excludeDomains,
       // You can add other Tavily parameters from apiConfig here
     };
 
@@ -421,10 +438,12 @@ function formatSearchResultsForAI(results: TavilyResult | null): string {
 
 // 修改：fetchTimelineData函数，修改超时设置并添加流式处理支持
 export async function fetchTimelineData(
-  query: string,
+  queries: string[],
   apiConfig: ApiConfig,
   progressCallback?: ProgressCallback,
-  streamCallback?: StreamCallback
+  streamCallback?: StreamCallback,
+  eCommerceMode: ECommerceMode = 'notECommerce',
+  dateRange?: { startDate?: Date; endDate?: Date }
 ): Promise<TimelineData> {
   try {
     const { model, endpoint, apiKey } = apiConfig;
@@ -432,24 +451,28 @@ export async function fetchTimelineData(
     const apiUrl = getApiUrl(apiConfig, 'chat');
 
     if (progressCallback) {
-      progressCallback(`开始处理关键词：${query}`, 'pending');
+      progressCallback(`开始处理多个查询`, 'pending');
     }
 
     // 先执行搜索查询获取最新信息
-    let searchResults = null;
     let searchContext = "";
 
     if (apiConfig.tavily?.apiKey) {
-      searchResults = await performSearch(query, apiConfig, progressCallback);
-      searchContext = formatSearchResultsForAI(searchResults);
+      const searchPromises = queries.map(query =>
+        performSearch(query, apiConfig, progressCallback, eCommerceMode, dateRange)
+      );
+      const searchResultsArray = await Promise.all(searchPromises);
+      
+      searchResultsArray.forEach((searchResults, index) => {
+        searchContext += `--- 搜索主题: ${queries[index]} ---\n`;
+        searchContext += formatSearchResultsForAI(searchResults);
+        searchContext += `\n\n`;
+      });
+
       if (progressCallback) {
         progressCallback(
-          `搜索完成，${
-            searchResults && searchResults.results.length > 0
-              ? `获取到${searchResults.results.length}条结果`
-              : '未找到结果'
-          }`,
-          searchResults && searchResults.results.length > 0 ? 'completed' : 'completed'
+          `所有搜索完成`,
+          'completed'
         );
       }
     }
@@ -466,7 +489,7 @@ export async function fetchTimelineData(
         { role: "system", content: SYSTEM_PROMPT },
         // 如果有搜索结果，添加到消息中
         ...(searchContext ? [{ role: "system", content: searchContext }] : []),
-        { role: "user", content: `请为以下事件创建时间轴：${query}` }
+        { role: "user", content: `请根据以下多个来源的搜索结果，为我生成一个全面的时间轴和总结。` }
       ],
       temperature: 0.7
     };
@@ -490,28 +513,15 @@ export async function fetchTimelineData(
 
     // 如果提供了streamCallback，使用流式处理
     if (streamCallback) {
-      // 收集完整输出
-      let fullOutput = "";
-
-      // 流式请求处理回调
-      const handleStreamChunk = (chunk: string, isDone: boolean) => {
-        // 将新的内容块添加到完整输出中
-        fullOutput += chunk;
-
-        // 传递给原始回调
-        streamCallback(chunk, isDone);
-
-        // 当完成时，标记进度为完成
+      await fetchWithStream(apiUrl, payload, (chunk, isDone) => {
+        content += chunk;
+        if (streamCallback) {
+          streamCallback(chunk, isDone);
+        }
         if (isDone && progressCallback) {
           progressCallback('AI助手已生成时间轴数据，正在处理结果', 'completed');
         }
-      };
-
-      // 发起流式请求
-      await fetchWithStream(apiUrl, payload, handleStreamChunk);
-
-      // 使用收集的完整输出
-      content = fullOutput;
+      });
     } else {
       // 非流式处理：原有的实现
       const headers = {
@@ -571,7 +581,12 @@ export async function fetchEventDetails(
     let searchContext = "";
 
     if (apiConfig.tavily?.apiKey) {
-      searchResults = await performSearch(query, apiConfig, progressCallback);
+      // This is a temporary solution. We need to parse the ecommerce mode from the query.
+      let eCommerceMode: ECommerceMode = 'notECommerce';
+      if (query.includes('B2C')) eCommerceMode = 'b2c';
+      if (query.includes('B2B')) eCommerceMode = 'b2b';
+      if (query.includes('B2C') && query.includes('B2B')) eCommerceMode = 'both';
+      searchResults = await performSearch(query, apiConfig, progressCallback, eCommerceMode);
       searchContext = formatSearchResultsForAI(searchResults);
       if (progressCallback) {
         progressCallback('事件详情搜索完成', 'completed');
@@ -617,28 +632,15 @@ export async function fetchEventDetails(
 
     // 如果提供了streamCallback，使用流式处理
     if (streamCallback) {
-      // 收集完整输出
-      let fullOutput = "";
-
-      // 流式请求处理回调
-      const handleStreamChunk = (chunk: string, isDone: boolean) => {
-        // 将新的内容块添加到完整输出中
-        fullOutput += chunk;
-
-        // 传递给原始回调
-        streamCallback(chunk, isDone);
-
-        // 当完成时，标记进度为完成
+      await fetchWithStream(apiUrl, payload, (chunk, isDone) => {
+        content += chunk;
+        if (streamCallback) {
+          streamCallback(chunk, isDone);
+        }
         if (isDone && progressCallback) {
           progressCallback('事件详情分析完成', 'completed');
         }
-      };
-
-      // 发起流式请求
-      await fetchWithStream(apiUrl, payload, handleStreamChunk);
-
-      // 使用收集的完整输出
-      content = fullOutput;
+      });
     } else {
       // 非流式处理：原有的实现
       const headers = {
@@ -690,7 +692,12 @@ export async function fetchImpactAssessment(
     let searchContext = "";
 
     if (apiConfig.tavily?.apiKey) {
-      searchResults = await performSearch(query, apiConfig, progressCallback);
+      // This is a temporary solution. We need to parse the ecommerce mode from the query.
+      let eCommerceMode: ECommerceMode = 'notECommerce';
+      if (query.includes('B2C')) eCommerceMode = 'b2c';
+      if (query.includes('B2B')) eCommerceMode = 'b2b';
+      if (query.includes('B2C') && query.includes('B2B')) eCommerceMode = 'both';
+      searchResults = await performSearch(query, apiConfig, progressCallback, eCommerceMode);
       searchContext = formatSearchResultsForAI(searchResults);
       if (progressCallback) {
         progressCallback('影响评估数据搜索完成', 'completed');
@@ -728,28 +735,15 @@ export async function fetchImpactAssessment(
 
     // 如果提供了streamCallback，使用流式处理
     if (streamCallback) {
-      // 收集完整输出
-      let fullOutput = "";
-
-      // 流式请求处理回调
-      const handleStreamChunk = (chunk: string, isDone: boolean) => {
-        // 将新的内容块添加到完整输出中
-        fullOutput += chunk;
-
-        // 传递给原始回调
-        streamCallback(chunk, isDone);
-
-        // 当完成时，标记进度为完成
+      await fetchWithStream(apiUrl, payload, (chunk, isDone) => {
+        content += chunk;
+        if (streamCallback) {
+          streamCallback(chunk, isDone);
+        }
         if (isDone && progressCallback) {
           progressCallback('影响评估分析完成', 'completed');
         }
-      };
-
-      // 发起流式请求
-      await fetchWithStream(apiUrl, payload, handleStreamChunk);
-
-      // 使用收集的完整输出
-      content = fullOutput;
+      });
     } else {
       // 非流式处理
       const headers = {
