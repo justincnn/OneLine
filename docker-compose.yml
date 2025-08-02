@@ -1,8 +1,7 @@
 version: '3.8'
 services:
   oneline:
-    build:
-      context: .
+    image: justincnn/oneline:latest
     ports:
       - "3000:3000"
     restart: unless-stopped
