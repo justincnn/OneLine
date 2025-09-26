@@ -94,7 +94,7 @@ export function Timeline({ events, isLoading = false, onRequestDetails, summary 
 
     return (
       <div className="flex flex-wrap items-center gap-1 sm:gap-2 mt-2">
-        <Users className="h-4 w-4 text-muted-foreground mr-1" />
+        <FileText className="h-4 w-4 text-muted-foreground mr-1" />
         {visiblePeople.map((person, index) => (
           <div
             key={`${person.name}-${index}`}
