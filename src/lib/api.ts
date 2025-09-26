@@ -62,6 +62,7 @@ d. 如果无法确定哪个来源更可靠，可以在描述中列举不同的�
 事件描述尽可能详细，包含具体时间、地点、关键人物/公司和事件经过，并分析其产生的影响和后续发展。
 每个事件的描述在100-300字之间为宜。
 注重记录事件的事实性内容，而非评论性或推测性内容。
+最重要的一点：在生成每个事件时，必须从提供的搜索结果中筛选并包含至少5-10个最相关、最权威的新闻或网页作为来源URL链接，确保来源的多样性和高质量。
 `;
 
 // 详细事件分析的系统提示
@@ -423,7 +424,7 @@ async function simpleSearch(
       language: apiConfig.searxng.language || 'zh',
       timeRange: apiConfig.searxng.timeRange || 'year',
       engines: apiConfig.searxng.engines || null,
-      numResults: apiConfig.searxng.numResults || 10
+      numResults: apiConfig.searxng.numResults || 20
     };
 
     const response = await axios.post(apiUrl, payload);
@@ -477,7 +478,7 @@ function formatSearchResultsForAI(results: SearxngResult | null): string {
   }
 
   // 取最多10条结果
-  const topResults = results.results.slice(0, 10);
+  const topResults = results.results.slice(0, 20);
 
   let formattedText = `以下是与"${results.query}"相关的最新搜索结果：\n\n`;
 
