@@ -10,8 +10,8 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "一线 - AI驱动的热点事件时间轴",
-  description: "使用AI技术，快速生成热点事件的时间轴，帮助您洞察事件发展脉络，获得全面的历史视角。",
+  title: "情景信息收集工具",
+  description: "AI驱动的搜索工具",
 };
 
 export default function RootLayout({
