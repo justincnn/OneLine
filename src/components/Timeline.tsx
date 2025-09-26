@@ -1,14 +1,14 @@
 "use client";
 
+import 'react';
 import React, { useState, useEffect, useRef } from 'react';
 import type { TimelineEvent, Person } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Avatar } from '@/components/ui/avatar';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import type { StreamCallback } from '@/lib/api';
-import { Clock, FileText } from 'lucide-react';
+import { Clock, FileText, Users, ChevronsUpDown } from 'lucide-react';
 
 interface TimelineProps {
   events: TimelineEvent[];
@@ -24,11 +24,10 @@ export function Timeline({ events, isLoading = false, onRequestDetails, summary 
   const [expandedEvents, setExpandedEvents] = useState<Set<string>>(new Set());
   const [isLoadingDetails, setIsLoadingDetails] = useState<boolean>(false);
   const [isStreamingDetails, setIsStreamingDetails] = useState<boolean>(false);
+  const [expandedPeople, setExpandedPeople] = useState<Set<string>>(new Set());
 
-  // 用于存储流式响应的ref
   const streamContentRef = useRef<string>('');
 
-  // 清理流式响应缓存
   useEffect(() => {
     if (!showDetails) {
       streamContentRef.current = '';
@@ -37,6 +36,18 @@ export function Timeline({ events, isLoading = false, onRequestDetails, summary 
 
   const toggleExpand = (eventId: string) => {
     setExpandedEvents(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(eventId)) {
+        newSet.delete(eventId);
+      } else {
+        newSet.add(eventId);
+      }
+      return newSet;
+    });
+  };
+
+  const togglePeopleExpand = (eventId: string) => {
+    setExpandedPeople(prev => {
       const newSet = new Set(prev);
       if (newSet.has(eventId)) {
         newSet.delete(eventId);
@@ -56,7 +67,6 @@ export function Timeline({ events, isLoading = false, onRequestDetails, summary 
     streamContentRef.current = '';
 
     try {
-      // 流式回调处理函数
       const streamCallback: StreamCallback = (chunk, isDone) => {
         streamContentRef.current += chunk;
         setDetailsContent(streamContentRef.current);
@@ -67,7 +77,6 @@ export function Timeline({ events, isLoading = false, onRequestDetails, summary 
         }
       };
 
-      // 使用流式请求
       await onRequestDetails(event, streamCallback);
     } catch (error) {
       console.error('Failed to fetch details:', error);
@@ -76,55 +85,69 @@ export function Timeline({ events, isLoading = false, onRequestDetails, summary 
     }
   };
 
-  const renderPeople = (people: Person[]) => {
+  const renderPeople = (eventId: string, people: Person[]) => {
+    const isExpanded = expandedPeople.has(eventId);
+    const MAX_VISIBLE = 3;
+    const visiblePeople = isExpanded ? people : people.slice(0, MAX_VISIBLE);
+
+    if (people.length === 0) return null;
+
     return (
-      <div className="flex flex-wrap gap-1 sm:gap-2 mt-2">
-        {people.map((person, index) => (
+      <div className="flex flex-wrap items-center gap-1 sm:gap-2 mt-2">
+        <Users className="h-4 w-4 text-muted-foreground mr-1" />
+        {visiblePeople.map((person, index) => (
           <div
             key={`${person.name}-${index}`}
             className="flex items-center gap-1 rounded-full px-1.5 sm:px-2 py-0.5 sm:py-1 text-xs backdrop-blur-md"
             style={{
               backgroundColor: `${person.color}20`,
-              borderLeft: `3px solid ${person.color}`,
-              boxShadow: `0 0 10px ${person.color}10`
+              border: `1px solid ${person.color}50`,
             }}
           >
-            <Avatar className="h-4 w-4 sm:h-5 sm:w-5">
-              <div
-                className="h-full w-full rounded-full"
-                style={{ backgroundColor: person.color }}
-              />
-            </Avatar>
-            <span style={{ color: person.color }} className="text-xs">
+            <span style={{ color: person.color }} className="font-medium">
               {person.name}
             </span>
             {person.role && (
-              <span className="text-xs opacity-70 hidden sm:inline"> - {person.role}</span>
+              <span className="text-xs opacity-70 hidden sm:inline">({person.role})</span>
             )}
           </div>
         ))}
+        {people.length > MAX_VISIBLE && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => togglePeopleExpand(eventId)}
+            className="h-6 px-2 text-xs rounded-full"
+          >
+            {isExpanded ? '收起' : `+${people.length - MAX_VISIBLE}`}
+          </Button>
+        )}
       </div>
     );
   };
 
   const renderMarkdown = (content: string) => {
     const formatMarkdownText = (text: string) => {
-      const boldRegex = /\*\*(.*?)\*\*/g;
-      let formatted = text.replace(boldRegex, '<strong>$1</strong>');
+      let formatted = text;
+      // Bold, Italic, Code
+      formatted = formatted.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+      formatted = formatted.replace(/\*(.*?)\*/g, '<em>$1</em>');
+      formatted = formatted.replace(/`(.*?)`/g, '<code>$1</code>');
 
-      const italicRegex = /\*(.*?)\*/g;
-      formatted = formatted.replace(italicRegex, '<em>$1</em>');
-
-      const codeRegex = /`(.*?)`/g;
-      formatted = formatted.replace(codeRegex, '<code>$1</code>');
-
-      // 添加对Markdown链接的处理，解决链接尾部带括号或方括号的问题
-      const linkRegex = /\[(.*?)\]\((.*?)\)/g;
-      formatted = formatted.replace(linkRegex, (match, text, url) => {
-        // 移除URL中可能的尾部括号和方括号
+      // Links
+      formatted = formatted.replace(/\[(.*?)\]\((.*?)\)/g, (match, text, url) => {
         const cleanUrl = url.replace(/[\)\]]$/, '');
         return `<a href="${cleanUrl}" target="_blank" rel="noopener noreferrer" class="text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 underline">${text}</a>`;
       });
+
+      // Unordered Lists
+      formatted = formatted.replace(/^\s*[-*]\s+(.*)/gm, '<ul class="list-disc list-inside ml-4"><li>$1</li></ul>');
+      formatted = formatted.replace(/<\/ul>\n<ul class="list-disc list-inside ml-4">/g, '');
+
+
+      // Ordered Lists
+      formatted = formatted.replace(/^\s*\d+\.\s+(.*)/gm, '<ol class="list-decimal list-inside ml-4"><li>$1</li></ol>');
+      formatted = formatted.replace(/<\/ol>\n<ol class="list-decimal list-inside ml-4">/g, '');
 
       return formatted;
     };
@@ -133,61 +156,30 @@ export function Timeline({ events, isLoading = false, onRequestDetails, summary 
     const sections = [];
     const titleMatches = [...content.matchAll(sectionsRegex)];
 
-    for (let i = 0; i < titleMatches.length; i++) {
-      const titleMatch = titleMatches[i];
-      const sectionTitle = titleMatch[1].trim();
-
-      const contentStartIndex = titleMatch.index! + titleMatch[0].length;
-      const contentEndIndex = i < titleMatches.length - 1 ? titleMatches[i + 1].index! : content.length;
-
-      const sectionContent = content.substring(contentStartIndex, contentEndIndex).trim();
-
-      sections.push({ title: sectionTitle, isTitle: true });
-      sections.push({ content: sectionContent, isTitle: false });
-    }
-
-    if (sections.length === 0) {
-      return (
-        <div className="space-y-4">
-          {content.split("\n\n").map((paragraph, index) => (
-            <div
-              key={`paragraph-${index}`}
-              className="text-sm"
-              dangerouslySetInnerHTML={{
-                __html: formatMarkdownText(paragraph.replace(/\n/g, '<br />'))
-              }}
-            />
-          ))}
-        </div>
-      );
-    }
-
-    return (
-      <div className="space-y-4">
-        {sections.map((section, index) => {
-          if (section.isTitle) {
-            return (
-              <div key={`section-title-${index}`} className="mt-6 first:mt-0">
-                <h3 className="text-base font-semibold mb-2">{section.title}</h3>
-              </div>
-            );
-          } else {
-            return (
-              <div key={`section-content-${index}`} className="space-y-3">
-                {section.content.split("\n\n").map((paragraph, pIndex) => (
-                  <div
-                    key={`p-${index}-${pIndex}`}
-                    className="text-sm"
-                    dangerouslySetInnerHTML={{
-                      __html: formatMarkdownText(paragraph.replace(/\n/g, '<br />'))
-                    }}
-                  />
+    if (titleMatches.length > 0) {
+        for (let i = 0; i < titleMatches.length; i++) {
+            const titleMatch = titleMatches[i];
+            const sectionTitle = titleMatch[1].trim();
+            const contentStartIndex = titleMatch.index! + titleMatch[0].length;
+            const contentEndIndex = i < titleMatches.length - 1 ? titleMatches[i + 1].index! : content.length;
+            const sectionContent = content.substring(contentStartIndex, contentEndIndex).trim();
+            sections.push({ title: sectionTitle, content: sectionContent });
+        }
+        return (
+            <div className="space-y-4">
+                {sections.map((section, index) => (
+                    <div key={`section-${index}`}>
+                        <h3 className="text-base font-semibold mb-2 mt-4">{section.title}</h3>
+                        <div className="space-y-3 text-sm" dangerouslySetInnerHTML={{ __html: formatMarkdownText(section.content.replace(/\n/g, '<br />')) }} />
+                    </div>
                 ))}
-              </div>
-            );
-          }
-        })}
-      </div>
+            </div>
+        );
+    }
+
+    // Fallback for content without section titles
+    return (
+        <div className="space-y-4 text-sm" dangerouslySetInnerHTML={{ __html: formatMarkdownText(content.replace(/\n\n/g, '<br /><br />')) }} />
     );
   };
 
@@ -264,26 +256,25 @@ export function Timeline({ events, isLoading = false, onRequestDetails, summary 
         {events.map((event, index) => {
           const isExpanded = expandedEvents.has(event.id);
           return (
-            <div key={event.id} className="animate-slide-up" style={{ animationDelay: `${index * 0.1}s` }}>
-              <div className="relative">
-                {/* 卡片右侧的时间轴线 */}
-                <div className="absolute right-8 top-0 bottom-0 w-px bg-border/50 mx-auto rounded-full"></div>
-                {index < events.length - 1 && (
-                  <div className="absolute right-8 bottom-0 transform translate-x-[-6px] w-3 h-3 rounded-full bg-amber-400 animate-pulse"></div>
-                )}
+            <div key={event.id} className="animate-slide-up timeline-item-container" style={{ animationDelay: `${index * 0.1}s` }}>
+              <div className="relative pl-8">
+                {/* 时间轴节点和线 */}
+                <div className="absolute left-0 top-1 h-full">
+                  <div className="w-px h-full bg-border/50"></div>
+                  <div className="absolute top-0 left-1/2 -translate-x-1/2 w-3 h-3 rounded-full bg-primary/20 border-2 border-primary/50 timeline-node"></div>
+                </div>
 
-                <Card className="event-card timeline-card w-full">
-                  <CardHeader className="p-2 sm:p-6 pb-0 sm:pb-2">
+                <Card className="event-card timeline-card w-full ml-4">
+                  <CardHeader className="p-3 sm:p-4">
                     <div className="flex justify-between items-start gap-2">
-                      <CardTitle className="text-sm sm:text-lg break-words leading-tight sm:leading-normal">{event.title}</CardTitle>
-                      {/* 时间标注现在在卡片内部 */}
-                      <div className="timeline-date-badge whitespace-nowrap text-xs sm:text-sm px-2 sm:px-3 py-1 rounded-full flex items-center gap-1.5 shrink-0">
-                        <Clock className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+                      <CardTitle className="text-sm sm:text-base font-semibold break-words leading-tight sm:leading-normal">{event.title}</CardTitle>
+                      <div className="timeline-date-badge whitespace-nowrap text-xs px-2 py-0.5 rounded-full flex items-center gap-1 shrink-0">
+                        <Clock className="h-3 w-3" />
                         <span>{event.date}</span>
                       </div>
                     </div>
                     {event.source && (
-                      <CardDescription className="text-[10px] sm:text-xs mt-1 line-clamp-1">
+                      <CardDescription className="text-xs mt-1 line-clamp-1">
                         来源: {event.sourceUrl ? (
                           <a
                             href={event.sourceUrl}
@@ -296,20 +287,21 @@ export function Timeline({ events, isLoading = false, onRequestDetails, summary 
                         ) : event.source}
                       </CardDescription>
                     )}
-                    {renderPeople(event.people)}
                   </CardHeader>
-                  <CardContent className="p-2 sm:p-6 pt-1 sm:pt-2">
-                    <p className={`text-xs sm:text-base ${isExpanded ? '' : 'line-clamp-3'} leading-tight sm:leading-normal`}>
-                      {event.description}
-                    </p>
+                  <CardContent className="p-3 sm:p-4 pt-0">
+                    <div className={`text-xs sm:text-sm prose dark:prose-invert max-w-none ${isExpanded ? '' : 'line-clamp-3'}`}
+                         dangerouslySetInnerHTML={{ __html: renderMarkdown(event.description).props.dangerouslySetInnerHTML.__html }}
+                    />
+                    {renderPeople(event.id, event.people)}
                   </CardContent>
-                  <CardFooter className="p-2 sm:p-6 pt-0 sm:pt-0 flex justify-between">
+                  <CardFooter className="p-3 sm:p-4 pt-0 flex justify-between items-center">
                     <Button
                       variant="ghost"
                       size="sm"
                       onClick={() => toggleExpand(event.id)}
-                      className="text-xs sm:text-sm rounded-full h-7 sm:h-8 px-2 sm:px-3 min-w-0"
+                      className="text-xs sm:text-sm rounded-full h-7 px-2"
                     >
+                      <ChevronsUpDown className="h-4 w-4 mr-1" />
                       {isExpanded ? '收起' : '展开'}
                     </Button>
                     <Button
@@ -384,34 +376,33 @@ export function Timeline({ events, isLoading = false, onRequestDetails, summary 
 
         /* 添加时间轴卡片新样式 */
         .timeline-card {
-          backdrop-filter: blur(15px);
-          background-color: rgba(255, 255, 255, 0.5);
-          border: 1px solid rgba(255, 255, 255, 0.3);
-          border-radius: 0.8rem;
-          box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+          backdrop-filter: blur(10px);
+          background-color: rgba(255, 255, 255, 0.6);
+          border: 1px solid rgba(255, 255, 255, 0.2);
+          border-radius: 0.75rem;
+          box-shadow: 0 2px 10px rgba(0, 0, 0, 0.03);
           transition: all 0.3s ease;
         }
 
         .dark .timeline-card {
-          background-color: rgba(30, 30, 30, 0.5);
-          border: 1px solid rgba(80, 80, 80, 0.3);
+          background-color: rgba(30, 30, 30, 0.6);
+          border: 1px solid rgba(80, 80, 80, 0.4);
+        }
+        
+        .timeline-item-container:hover .timeline-node {
+            transform: translateX(-50%) scale(1.2);
+            background-color: hsl(var(--primary));
         }
 
-        .timeline-card:hover {
+        .timeline-item-container:hover .timeline-card {
           transform: translateY(-2px);
-          box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+          box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08);
         }
 
         .timeline-date-badge {
-          background-color: rgba(var(--primary), 0.1);
-          color: hsl(var(--primary));
-          border-left: 3px solid hsl(var(--primary));
-          box-shadow: 0 0 10px rgba(var(--primary), 0.1);
+          background-color: hsl(var(--secondary));
+          color: hsl(var(--secondary-foreground));
           font-weight: 500;
-        }
-
-        .dark .timeline-date-badge {
-          background-color: rgba(var(--primary), 0.2);
         }
       `}</style>
     </div>
