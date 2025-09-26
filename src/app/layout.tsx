@@ -11,7 +11,6 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   title: "情景信息收集工具",
-  description: "AI驱动的搜索工具",
 };
 
 export default function RootLayout({
