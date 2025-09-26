@@ -4,7 +4,6 @@ import { useState, useEffect, useRef } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Timeline } from '@/components/Timeline';
-import { ImpactAssessment } from '@/components/ImpactAssessment';
 import { EventSummary } from '@/components/EventSummary';
 import { ApiSettings } from '@/components/ApiSettings';
 import { ApiProvider, useApi } from '@/contexts/ApiContext';
@@ -17,13 +16,11 @@ import {
   SelectValue
 } from '@/components/ui/select';
 import type { TimelineData, TimelineEvent, DateFilterOption, DateFilterConfig } from '@/types';
-import { fetchTimelineData, fetchEventDetails, fetchImpactAssessment, type ProgressCallback, type StreamCallback } from '@/lib/api';
+import { fetchTimelineData, fetchEventDetails, type ProgressCallback, type StreamCallback } from '@/lib/api';
 import { SearchProgress, type SearchProgressStep } from '@/components/SearchProgress';
-import { BaiduHotList } from '@/components/BaiduHotList';
-import { HotSearchDropdown } from '@/components/HotSearchDropdown';
 import { SearchHistory, type SearchHistoryItem } from '@/components/SearchHistory';
 import { toast } from 'sonner';
-import { Settings, SortDesc, SortAsc, Download, Search, ChevronDown, Flame, FileText } from 'lucide-react';
+import { Settings, SortDesc, SortAsc, Download, Search, ChevronDown, FileText } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatMarkdownText } from '@/lib/markdown';
@@ -72,16 +69,10 @@ function MainContent() {
   const [searchProgressSteps, setSearchProgressSteps] = useState<SearchProgressStep[]>([]);
   const [searchProgressActive, setSearchProgressActive] = useState(false);
 
-  const [showHotList, setShowHotList] = useState(false);
-  const [showHotSearch, setShowHotSearch] = useState(true);
-  const [flyingHotItem, setFlyingHotItem] = useState<{ title: string, startX: number, startY: number } | null>(null);
-
   // Search history related states
   const [searchHistory, setSearchHistory] = useState<SearchHistoryItem[]>([]);
   const [showSearchHistory, setShowSearchHistory] = useState(false);
   const MAX_HISTORY_ITEMS = 10;
-
-  const [showImpact, setShowImpact] = useState<boolean>(false);
 
   const [searchStartTime, setSearchStartTime] = useState<number | null>(null);
   const [searchTimeElapsed, setSearchTimeElapsed] = useState<number | null>(null);
@@ -92,9 +83,6 @@ function MainContent() {
   const [eventSummary, setEventSummary] = useState<string | null>(null);
   const [showEventSummary, setShowEventSummary] = useState<boolean>(false);
 
-  // For impact assessment content (to parse summary)
-  const [impactContent, setImpactContent] = useState<string | null>(null);
-  const [parsedImpact, setParsedImpact] = useState<{ summary?: string } | null>(null);
 
   // Load search history from localStorage when component mounts
   useEffect(() => {
@@ -196,51 +184,6 @@ function MainContent() {
     }
   };
 
-  const handleHotItemClick = (title: string) => {
-    if (title.trim() === query.trim() && timelineData.events.length > 0 && timelineVisible) {
-      console.log("跳过相同热搜项点击:", title);
-      setShowHotList(false);
-      setShowHotSearch(false);
-      setShowSearchHistory(false);
-      return;
-    }
-
-    const hotItems = document.querySelectorAll('.hot-item');
-    let startX = 0;
-    let startY = 0;
-
-    hotItems.forEach((item) => {
-      if (item.textContent?.includes(title)) {
-        const rect = item.getBoundingClientRect();
-        startX = rect.left + rect.width / 2;
-        startY = rect.top + rect.height / 2;
-      }
-    });
-
-    lastSearchQuery.current = title.trim();
-
-    // Save the hot item to search history
-    saveSearchToHistory(title);
-
-    setFlyingHotItem({ title, startX, startY });
-
-    setTimeout(() => {
-      setQuery(title);
-      setShowHotList(false);
-      setFlyingHotItem(null);
-      setShowHotSearch(false);
-      setShowSearchHistory(false);
-
-      setTimeout(() => {
-        if (inputRef.current) {
-          const form = inputRef.current.form;
-          if (form) {
-            form.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
-          }
-        }
-      }, 300);
-    }, 600);
-  };
 
   useEffect(() => {
     const handleScroll = () => {
@@ -320,36 +263,7 @@ function MainContent() {
   }, [timelineData.events.length, timelineVisible]);
 
   useEffect(() => {
-    if (flyingHotItem && inputRef.current) {
-      const inputRect = inputRef.current.getBoundingClientRect();
-      const inputCenterX = inputRect.left + inputRect.width / 2;
-      const inputCenterY = inputRect.top + inputRect.height / 2;
-
-      const flyX = inputCenterX - flyingHotItem.startX;
-      const flyY = inputCenterY - flyingHotItem.startY;
-
-      document.documentElement.style.setProperty('--fly-x', `${flyX}px`);
-      document.documentElement.style.setProperty('--fly-y', `${flyY}px`);
-    }
-  }, [flyingHotItem]);
-
-  useEffect(() => {
-    if (!query.trim()) {
-      setShowHotSearch(true);
-      setShowSearchHistory(false);
-    }
-  }, [query]);
-
-  useEffect(() => {
-    if (query.trim()) {
-      setShowHotSearch(false);
-      setShowSearchHistory(false);
-    }
-  }, [query]);
-
-  useEffect(() => {
     if (timelineVisible && timelineData.events.length > 0) {
-      setShowHotSearch(false);
       setShowSearchHistory(false);
     }
   }, [timelineVisible, timelineData.events.length]);
@@ -360,36 +274,6 @@ function MainContent() {
     setShowEventSummary(true);
   };
 
-  // For impact assessment summary extraction
-  const extractSummary = (content: string): string => {
-    if (!content) return '';
-
-    // First try to find the summary section marked with ===事件简介===
-    const summaryMatch = content.match(/===事件简介===\s*([\s\S]*?)(?=\s*===经济影响===|$)/);
-    if (summaryMatch && summaryMatch[1]) {
-      return summaryMatch[1].trim();
-    }
-
-    // If not found, try to extract the first paragraph as a fallback
-    const firstParagraph = content.split('\n\n')[0];
-    if (firstParagraph) {
-      return firstParagraph.trim();
-    }
-
-    return '';
-  };
-
-  // Update the useEffect for processing impact content to properly set parsedImpact
-  useEffect(() => {
-    if (impactContent) {
-      const summary = extractSummary(impactContent);
-      setParsedImpact(prev => ({ ...prev, summary }));
-      if (summary && !eventSummary) {
-        setEventSummary(summary);
-        setShowEventSummary(true);
-      }
-    }
-  }, [impactContent, eventSummary]);
 
   const sortEvents = (events: TimelineEvent[]): TimelineEvent[] => {
     return [...events].sort((a, b) => {
@@ -435,8 +319,6 @@ function MainContent() {
     // Save search query to history
     saveSearchToHistory(query);
 
-    setShowHotList(false);
-    setShowHotSearch(false);
     setShowSearchHistory(false);
 
     setSearchProgressSteps([]);
@@ -460,11 +342,8 @@ function MainContent() {
   const fetchData = async () => {
     setIsLoading(true);
     setError('');
-    setShowImpact(false); // Initially don't show impact until we determine if it's relevant
     setShowEventSummary(false);
     setEventSummary(null);
-    setImpactContent(null);
-    setParsedImpact(null);
 
     if (timelineData.events.length === 0) {
       setTimelineVisible(false);
@@ -501,30 +380,6 @@ function MainContent() {
         }
 
         queryWithDateFilter += dateRangeText;
-      }
-
-      // 判断查询类型以决定适当的分析方法
-      const shouldAnalyzeImpact = determineIfShouldAnalyzeImpact(query);
-      if (shouldAnalyzeImpact) {
-        setShowImpact(true);
-
-        // 获取影响评估内容（流式）
-        if (progressCallback) {
-          progressCallback('正在分析事件影响', 'pending');
-        }
-
-        let impactText = '';
-        fetchImpactAssessment(
-          queryWithDateFilter,
-          apiConfig,
-          progressCallback,
-          (chunk, isDone) => {
-            impactText += chunk;
-            setImpactContent(impactText);
-          }
-        ).catch(err => {
-          console.error('Error fetching impact assessment:', err);
-        });
       }
 
       // 在短暂延迟后生成时间轴
@@ -576,7 +431,7 @@ function MainContent() {
         } finally {
           setIsLoading(false);
         }
-      }, shouldAnalyzeImpact ? 1000 : 0); // 如果有影响分析，延迟1秒，否则立即开始
+      }, 0); // 如果有影响分析，延迟1秒，否则立即开始
 
     } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : '发生错误，请稍后再试';
@@ -594,26 +449,6 @@ function MainContent() {
   };
   // --- END UPDATED fetchData ---
 
-  // 判断查询是否适合做影响评估分析
-  const determineIfShouldAnalyzeImpact = (queryText: string): boolean => {
-    // 检查查询内容是否是事件或话题，而不是简单的人物、概念或其他不适合影响分析的内容
-
-    // 判断是否是热点事件、社会现象、政治事件、经济事件、国际关系等有明显影响的主题
-    const impactAnalysisKeywords = [
-      '事件', '冲突', '危机', '战争', '协议', '签署', '宣布', '政策', '改革', '谈判',
-      '疫情', '灾害', '事故', '抗议', '示威', '选举', '公投', '会谈', '会议', '峰会',
-      '事故', '决策', '立法', '判决', '制裁', '合作', '争端', '矛盾', '问题', '风波',
-      '关系', '纠纷', '协议', '条约', '法案', '通过', '改变', '变化', '影响', '改革'
-    ];
-
-    // 检查查询中是否包含这些关键词
-    const hasImpactKeyword = impactAnalysisKeywords.some(keyword =>
-      queryText.includes(keyword)
-    );
-
-    // 简单的规则：查询文本较长（可能是描述性的事件）或包含影响分析关键词
-    return queryText.length > 8 || hasImpactKeyword;
-  };
 
   const formatDate = (date: Date | undefined): string => {
     if (!date) return '';
@@ -707,62 +542,6 @@ function MainContent() {
     }
   };
 
-  const handleRequestImpact = async (query: string, streamCallback?: StreamCallback): Promise<string> => {
-    if (!isConfigured) {
-      toast.info('请先配置API设置');
-      setShowSettings(true);
-      return '请先配置API设置';
-    }
-
-    if (isPasswordProtected && !isPasswordValidated) {
-      toast.info('请先验证访问密码');
-      setShowSettings(true);
-      return '请先验证访问密码';
-    }
-
-    setSearchProgressSteps([]);
-    setSearchProgressActive(true);
-    setSearchProgressVisible(true);
-
-    setSearchStartTime(Date.now());
-    setSearchTimeElapsed(null);
-
-    try {
-      let impactText = '';
-      const result = await fetchImpactAssessment(
-        query,
-        apiConfig,
-        progressCallback,
-        (chunk, isDone) => {
-          impactText += chunk;
-          setImpactContent(impactText);
-          if (streamCallback) streamCallback(chunk, isDone);
-        }
-      );
-
-      if (searchStartTime) {
-        setSearchTimeElapsed(Date.now() - searchStartTime);
-      }
-
-      setTimeout(() => {
-        setSearchProgressActive(false);
-      }, 1000);
-
-      return result;
-    } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : '获取影响评估失败';
-      toast.error(errorMessage);
-      console.error('Error fetching impact assessment:', err);
-
-      setSearchProgressActive(false);
-
-      if (searchStartTime) {
-        setSearchTimeElapsed(Date.now() - searchStartTime);
-      }
-
-      return '获取影响评估失败，请稍后再试';
-    }
-  };
 
   const exportAsImage = () => {
     if (filteredEvents.length === 0) {
@@ -786,7 +565,7 @@ function MainContent() {
         allowTaint: true,
         backgroundColor: '#ffffff'
       }).then(canvas => {
-        const fileName = `一线-${query.replace(/\s+/g, '-')}-${new Date().toISOString().slice(0, 10)}.png`;
+        const fileName = `信息收集-${query.replace(/\s+/g, '-')}-${new Date().toISOString().slice(0, 10)}.png`;
         const link = document.createElement('a');
         link.download = fileName;
         link.href = canvas.toDataURL('image/png');
@@ -803,9 +582,6 @@ function MainContent() {
     });
   };
 
-  const toggleHotList = () => {
-    setShowHotList(prev => !prev);
-  };
 
   // Handle a click on a history item
   const handleHistoryItemClick = (queryText: string) => {
@@ -867,9 +643,9 @@ function MainContent() {
       >
         {searchPosition === 'center' && (
           <div className="flex flex-col items-center mb-8 animate-slide-down">
-            <h1 className="text-4xl md:text-5xl font-bold mb-4 text-center page-title">一线</h1>
+            <h1 className="text-4xl md:text-5xl font-bold mb-4 text-center page-title">信息收集</h1>
             <p className="text-lg md:text-xl text-muted-foreground mb-8 text-center max-w-xl mx-auto">
-              AI驱动的热点事件时间轴 · 洞察历史脉络
+              AI驱动的搜索工具
             </p>
           </div>
         )}
@@ -968,11 +744,6 @@ function MainContent() {
               historyItems={searchHistory}
               onSelectHistoryItem={handleHistoryItemClick}
             />
-            <HotSearchDropdown
-              visible={searchPosition === 'center' && showHotSearch && !isLoading}
-              onSelectHotItem={handleHotItemClick}
-              hasSearchResults={timelineData.events.length > 0}
-            />
           </div>
         </div>
       </form>
@@ -987,24 +758,6 @@ function MainContent() {
         />
       </div>
 
-      <BaiduHotList
-        visible={showHotList}
-        onClose={() => setShowHotList(false)}
-        onSelectHotItem={handleHotItemClick}
-      />
-
-      {flyingHotItem && (
-        <div
-          className="fixed z-50 fly-to-input bg-primary text-primary-foreground px-3 py-1.5 rounded-full text-sm font-medium"
-          style={{
-            left: flyingHotItem.startX,
-            top: flyingHotItem.startY,
-            transform: 'translate(-50%, -50%)'
-          }}
-        >
-          {flyingHotItem.title}
-        </div>
-      )}
 
       {/* Split impact analysis and timeline */}
       <div className="flex-1 pt-16 pb-12 px-2 sm:px-4 md:px-8 w-full max-w-6xl mx-auto">
@@ -1018,17 +771,6 @@ function MainContent() {
           </div>
         )}
 
-        {/* 影响分析板块 */}
-        {(showImpact || timelineVisible) && (
-          <div className="mt-4 sm:mt-0 mb-0">
-            <ImpactAssessment
-              query={query}
-              isLoading={isLoading}
-              onRequestImpact={handleRequestImpact}
-              onSummaryExtracted={handleSummaryExtracted}
-            />
-          </div>
-        )}
 
         {(timelineVisible || isLoading) && (
           <div
