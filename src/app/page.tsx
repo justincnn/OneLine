@@ -643,10 +643,7 @@ function MainContent() {
       >
         {searchPosition === 'center' && (
           <div className="flex flex-col items-center mb-8 animate-slide-down">
-            <h1 className="text-4xl md:text-5xl font-bold mb-4 text-center page-title">信息收集</h1>
-            <p className="text-lg md:text-xl text-muted-foreground mb-8 text-center max-w-xl mx-auto">
-              AI驱动的搜索工具
-            </p>
+            <h1 className="text-4xl md:text-5xl font-bold mb-4 text-center page-title">情景信息智能采集</h1>
           </div>
         )}
 
