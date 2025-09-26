@@ -43,17 +43,17 @@ docker pull justincnn/oneline
 然后运行容器：
 
 ```bash
-docker run -p 3000:3000 justincnn/oneline
+docker run -p 2231:2231 justincnn/oneline
 ```
 
-访问 `http://localhost:3000` 即可使用。
+访问 `http://localhost:2231` 即可使用。
 
 #### Docker配置
 
 如果需要自定义配置，可以通过环境变量进行设置：
 
 ```bash
-docker run -p 3000:3000 \
+docker run -p 2231:2231 \
   -e API_ENDPOINT=https://api.example.com/v1/chat/completions \
   -e API_MODEL=gemini-2.0-pro-exp-search \
   -e API_KEY=your_api_key_here \
@@ -97,7 +97,7 @@ bun run dev
 npm run dev
 ```
 
-5. 访问 `http://localhost:3000` 开始使用
+5. 访问 `http://localhost:2231` 开始使用
 
 ## ⚙️ 配置说明
 
