@@ -8,7 +8,7 @@ export async function POST(request: Request) {
   try {
     const envApiKey = process.env.API_KEY;
     const envApiEndpoint = process.env.API_ENDPOINT;
-    const envApiModel = process.env.API_MODEL || 'gemini-2.0-flash-exp-search';
+    const envApiModel = process.env.API_MODEL || 'gemini-2.5-pro';
 
     const requestData = await request.json();
     const streamMode = requestData.stream !== false; // 默认流式

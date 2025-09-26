@@ -21,17 +21,17 @@ interface ApiContextType {
 
 const defaultApiConfig: ApiConfig = {
   endpoint: '',
-  model: 'gemini-2.0-flash-exp-search',
+  model: 'gemini-2.5-flash',
   apiKey: '',
   allowUserConfig: true,
   accessPassword: '',
   searxng: {
-    url: 'https://sousuo.emoe.top',
+    url: 'https://search.8108000.xyz',
     enabled: false,
     categories: 'general',
     language: 'zh',
     timeRange: 'year',
-    numResults: 5
+    numResults: 20
   }
 };
 
@@ -157,13 +157,13 @@ export function ApiProvider({ children }: { children: React.ReactNode }) {
           allowUserConfig: userConfigAllowed,
           accessPassword: envAccessPassword || '',
           searxng: {
-            url: envSearxngUrl || 'https://sousuo.emoe.top',
+            url: envSearxngUrl || defaultApiConfig.searxng?.url || 'https://search.8108000.xyz',
             // 如果NEXT_PUBLIC_SEARXNG_URL已设置，则自动启用SearXNG，即使NEXT_PUBLIC_SEARXNG_ENABLED未设置
             enabled: envSearxngEnabled || (!!envSearxngUrl && envSearxngUrl.trim() !== ''),
             categories: 'general',
             language: 'zh',
             timeRange: 'year',
-            numResults: 5
+            numResults: defaultApiConfig.searxng?.numResults || 20
           }
         };
         setIsConfigured(true); // 环境变量配置被视为已配置

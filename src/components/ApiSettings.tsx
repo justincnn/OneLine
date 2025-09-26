@@ -52,12 +52,12 @@ export function ApiSettings({ open, onOpenChange }: ApiSettingsProps) {
 
   // SearXNG配置状态，默认选择所有通用搜索和新闻引擎
   const [searxngConfig, setSearxngConfig] = useState<SearxngConfig>({
-    url: 'https://sousuo.emoe.top',
+    url: 'https://search.8108000.xyz',
     enabled: true,
     categories: 'general,news',
     language: 'zh',
     timeRange: 'year',
-    numResults: 5,
+    numResults: 25,
     engines: [...engineCategories['通用搜索'], ...engineCategories['新闻']]
   });
 

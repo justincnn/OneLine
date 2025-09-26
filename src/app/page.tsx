@@ -655,7 +655,7 @@ function MainContent() {
             <Input
               ref={inputRef}
               type="text"
-              placeholder="输入关键词，如：俄乌冲突..."
+              placeholder="输入关键词，如：中美关税..."
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               className="flex-1 border-0 bg-transparent focus-visible:ring-0 placeholder:text-muted-foreground/70 text-sm sm:text-base h-8 sm:h-10"
@@ -676,7 +676,7 @@ function MainContent() {
               <Select
                 value={dateFilter.option}
                 onValueChange={handleDateFilterChange as (value: string) => void}
-                defaultValue="all"
+                defaultValue="month"
               >
                 <SelectTrigger className="w-auto border-0 bg-transparent mr-2 focus:ring-0">
                   <div className="flex items-center">
