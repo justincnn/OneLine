@@ -65,12 +65,12 @@ export async function POST(request: Request) {
     const params: Record<string, any> = {
       q: query,
       format: 'json',
-      categories: requestData.categories || 'general',
+      categories: requestData.categories || 'general,news',
       language: requestData.language || 'zh',
-      time_range: requestData.timeRange || 'year', // 默认搜索最近一年的内容
+      time_range: requestData.timeRange || 'all', // 默认搜索最近一年的内容
       // 如果明确提供了引擎，则使用；否则传null让SearXNG自动选择
       engines: requestData.engines || null,
-      num_results: requestData.numResults || 10, // 默认返回10条结果
+      num_results: requestData.numResults || 30, // 默认返回10条结果
     };
 
     // 添加安全搜索参数，如果提供
