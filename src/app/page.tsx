@@ -53,7 +53,7 @@ function MainContent() {
   const [showSettings, setShowSettings] = useState(false);
   const [error, setError] = useState('');
   const [showFloatingButton, setShowFloatingButton] = useState(false);
-  const [dateFilter, setDateFilter] = useState<DateFilterConfig>({ option: 'all' });
+  const [dateFilter, setDateFilter] = useState<DateFilterConfig>({ option: 'month' });
   const [filteredEvents, setFilteredEvents] = useState<TimelineEvent[]>([]);
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
