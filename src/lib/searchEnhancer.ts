@@ -53,6 +53,16 @@ function tokenize(text: string): string[] {
 function extractSynonymsAndRelatedConcepts(text: string): string[] {
   // 常见概念词与同义词映射
   const synonymMap: Record<string, string[]> = {
+    '进出口': ['国际贸易', '跨境贸易', 'import export'],
+    '空运': ['航空货运', 'air freight', 'air cargo'],
+    '快递': ['express delivery', 'courier'],
+    '跨境电商': ['cross-border e-commerce'],
+    '供应链': ['supply chain', 'logistics'],
+    '公司': ['企业', '集团', 'company', 'corp'],
+    '产品': ['product', 'service'],
+    '市场': ['market', 'industry'],
+    '竞争': ['competitor', 'rivalry'],
+    '财报': ['financial report', 'annual report', 'earnings'],
     '战争': ['冲突', '战事', '军事行动', '军事冲突'],
     '和平': ['休战', '停火', '和解', '协议'],
     '协议': ['条约', '协定', '合同', '备忘录'],
@@ -103,75 +113,47 @@ function extractSynonymsAndRelatedConcepts(text: string): string[] {
  * @returns 拆分后的查询词数组
  */
 export function analyzeAndSplitQuery(originalQuery: string): string[] {
-  // 基本分词
-  const basicTokens = tokenize(originalQuery);
+  const queries: Set<string> = new Set([originalQuery]);
+  const lowerCaseQuery = originalQuery.toLowerCase();
 
-  // 提取同义词和相关概念
-  const synonyms = extractSynonymsAndRelatedConcepts(originalQuery);
+  // --- Keyword lists for context detection ---
+  const companyIndicators = ['公司', '集团', '企业', 'inc', 'ltd', 'corp', 'llc'];
+  const productIndicators = ['产品', '系列', '型号', '解决方案', 'software', 'hardware', 'platform'];
 
-  // 提取时间信息（年份、月份等）
-  const timePatterns = /\b(20\d{2}|19\d{2})年?\b|\b\d{1,2}月\b|\b\d{1,2}日\b/g;
-  const timeTokens = originalQuery.match(timePatterns) || [];
+  // --- Detect query type ---
+  const isCompanyQuery = companyIndicators.some(indicator => lowerCaseQuery.includes(indicator));
+  const isProductQuery = productIndicators.some(indicator => lowerCaseQuery.includes(indicator));
 
-  // 提取人名和地点（简单启发式方法）
-  const namePatterns = /[\u4e00-\u9fa5]{2,4}(?:总统|总理|主席|部长|官员|领导人)/g;
-  const nameTokens = originalQuery.match(namePatterns) || [];
-
-  // 提取可能的事件类型，扩展类型列表
-  const eventTypes = [
-    '战争', '冲突', '和平', '协议', '会谈', '峰会', '危机', '事件',
-    '爆炸', '抗议', '示威', '选举', '政变', '改革', '制裁', '协议',
-    '经济', '政治', '外交', '军事', '科技', '文化', '环境', '疫情',
-    '谈判', '会议', '签署', '发布', '宣布', '声明', '访问', '演讲',
-    'war', 'conflict', 'peace', 'agreement', 'talks', 'summit', 'crisis', 'incident',
-    'explosion', 'protest', 'election', 'coup', 'reform', 'sanctions',
-    'economic', 'political', 'diplomatic', 'military', 'tech', 'cultural', 'environment', 'pandemic',
-    'negotiation', 'meeting', 'signing', 'release', 'announce', 'statement', 'visit', 'speech'
-  ];
-
-  const eventTypeTokens = eventTypes.filter(type => originalQuery.includes(type));
-
-  // 构建核心搜索词
-  const coreQuery = basicTokens.length > 2 ? basicTokens.slice(0, 3).join(' ') : originalQuery;
-
-  // 构建拆分后的查询数组
-  const queries: string[] = [originalQuery]; // 始终包含原始查询
-
-  // 添加核心查询 + 时间信息
-  if (timeTokens.length > 0) {
-    queries.push(`${coreQuery} ${timeTokens.join(' ')}`);
+  if (isCompanyQuery) {
+    queries.add(`${originalQuery} 发展历史`);
+    queries.add(`${originalQuery} 组织架构`);
+    queries.add(`${originalQuery} 进出口业务`);
+    queries.add(`${originalQuery} 主要产品和服务`);
+    queries.add(`${originalQuery} 核心竞争力`);
+    queries.add(`${originalQuery} 竞争对手`);
+    queries.add(`${originalQuery} 供应链布局`);
+    queries.add(`${originalQuery} 最新财报`);
+    queries.add(`${originalQuery} investor relations`);
+  } else if (isProductQuery) {
+    queries.add(`${originalQuery} 进出口数据`);
+    queries.add(`${originalQuery} 海外市场发展`);
+    queries.add(`${originalQuery} 市场竞争格局`);
+    queries.add(`${originalQuery} 市场行情分析`);
+    queries.add(`${originalQuery} 跨境电商 趋势`);
+    queries.add(`${originalQuery} 航空货运 物流`);
+  } else {
+    // General business/economic query
+    queries.add(`${originalQuery} 对进出口的影响`);
+    queries.add(`${originalQuery} 供应链影响`);
+    queries.add(`${originalQuery} 市场趋势`);
+    queries.add(`${originalQuery} 相关政策`);
   }
 
-  // 添加核心查询 + 人物信息
-  if (nameTokens.length > 0) {
-    queries.push(`${coreQuery} ${nameTokens.join(' ')}`);
-  }
+  // Add generic high-value queries for any type
+  queries.add(`${originalQuery} 最新动态`);
+  queries.add(`${originalQuery} 市场分析报告`);
 
-  // 添加核心查询 + 事件类型
-  if (eventTypeTokens.length > 0) {
-    queries.push(`${coreQuery} ${eventTypeTokens.join(' ')}`);
-  }
-
-  // 添加核心查询 + 同义词/相关概念（选择几个最相关的）
-  if (synonyms.length > 0) {
-    const topSynonyms = synonyms.slice(0, 3);
-    queries.push(`${coreQuery} ${topSynonyms.join(' ')}`);
-  }
-
-  // 添加最新进展查询
-  queries.push(`${coreQuery} 最新进展`);
-  queries.push(`${coreQuery} 最新消息`);
-  queries.push(`${coreQuery} latest news`);
-  queries.push(`${coreQuery} recent updates`);
-
-  // 添加背景和影响查询
-  queries.push(`${coreQuery} 背景`);
-  queries.push(`${coreQuery} 影响`);
-  queries.push(`${coreQuery} background`);
-  queries.push(`${coreQuery} impact`);
-
-  // 去重
-  return Array.from(new Set(queries));
+  return Array.from(queries);
 }
 
 /**
@@ -374,9 +356,17 @@ function calculateRelevanceScore(
 
   // 4. 来源可信度：某些特定来源可能更值得信任
   const trustworthyDomains = [
-    'wikipedia.org', 'gov', 'edu', 'un.org', 'who.int', 'bbc.com',
-    'nytimes.com', 'reuters.com', 'theguardian.com', 'cnn.com',
-    'xinhuanet.com', 'people.com.cn', 'chinadaily.com.cn', 'sina.com.cn'
+    // News & Finance
+    'bloomberg.com', 'reuters.com', 'wsj.com', 'ft.com', 'economist.com',
+    'forbes.com', 'businessinsider.com', 'cnbc.com', 'marketwatch.com',
+    'caixinglobal.com', 'finance.yahoo.com', 'seekingalpha.com',
+    // Tech News
+    'techcrunch.com', 'theverge.com', 'wired.com', '36kr.com',
+    // Official/Gov
+    'gov', 'edu', 'un.org', 'who.int', 'wto.org', 'imf.org', 'worldbank.org',
+    // General High-Quality
+    'wikipedia.org', 'bbc.com', 'nytimes.com', 'theguardian.com', 'cnn.com',
+    'xinhuanet.com', 'people.com.cn'
   ];
 
   try {
