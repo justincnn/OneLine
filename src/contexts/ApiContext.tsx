@@ -222,13 +222,10 @@ export function ApiProvider({ children }: { children: React.ReactNode }) {
     // 如果不允许用户配置，则不更新
     if (!allowUserConfig) return;
 
-    // 如果当前使用环境变量配置，则切换到用户自定义配置
-    if (useEnvConfig) {
-      setUseEnvConfig(false);
-      // 保存选择到localStorage
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('oneLine_useEnvConfig', 'false');
-      }
+    // 强制切换到用户自定义配置模式
+    setUseEnvConfig(false);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('oneLine_useEnvConfig', 'false');
     }
 
     setApiConfig(prev => {
