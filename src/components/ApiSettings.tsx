@@ -99,38 +99,16 @@ export function ApiSettings({ open, onOpenChange }: ApiSettingsProps) {
       setPasswordError('');
       setError('');
 
-      // 更新效果，初始化SearXNG配置
-      // Respect auto-enabling/disabling when environment variable is set
-      let effectiveSearxng: SearxngConfig = {
-        url: 'https://sousuo.emoe.top',
+      // 从 apiConfig 初始化 searxngConfig
+      setSearxngConfig(apiConfig.searxng || {
+        url: 'https://search.8108000.xyz',
         enabled: true,
         categories: 'general,news',
         language: 'zh',
         timeRange: 'year',
-        numResults: 5,
+        numResults: 25,
         engines: [...engineCategories['通用搜索'], ...engineCategories['新闻']]
-      };
-
-      if (apiConfig.searxng) {
-        effectiveSearxng = {
-          url: apiConfig.searxng.url || 'https://sousuo.emoe.top',
-          enabled: typeof apiConfig.searxng.enabled === 'boolean' ? apiConfig.searxng.enabled : true,
-          categories: apiConfig.searxng.categories || 'general,news',
-          language: apiConfig.searxng.language || 'zh',
-          timeRange: apiConfig.searxng.timeRange || 'year',
-          numResults: apiConfig.searxng.numResults || 5,
-          engines: apiConfig.searxng.engines && apiConfig.searxng.engines.length > 0
-            ? apiConfig.searxng.engines
-            : [...engineCategories['通用搜索'], ...engineCategories['新闻']]
-        };
-      }
-
-      // 如果环境变量配置有 SearXNG 并且 enabled 字段为 false，则禁用
-      if (useEnvConfig && hasEnvConfig && apiConfig.searxng && typeof apiConfig.searxng.enabled === 'boolean') {
-        effectiveSearxng.enabled = apiConfig.searxng.enabled;
-      }
-
-      setSearxngConfig(effectiveSearxng);
+      });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [apiConfig, open, useEnvConfig, hasEnvConfig]);
@@ -237,7 +215,8 @@ export function ApiSettings({ open, onOpenChange }: ApiSettingsProps) {
         },
         body: JSON.stringify({
           query: 'test',
-          searxngUrl: searxngConfig.url
+          searxngUrl: searxngConfig.url,
+          ...searxngConfig
         }),
       });
 
