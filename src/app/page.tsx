@@ -352,35 +352,6 @@ function MainContent() {
     try {
       let queryWithDateFilter = query;
 
-      if (dateFilter.option !== 'all') {
-        let dateRangeText = '';
-        const now = new Date();
-
-        switch (dateFilter.option) {
-          case 'month':
-            const monthAgo = new Date(now);
-            monthAgo.setMonth(now.getMonth() - 1);
-            dateRangeText = `，请主要搜索 ${formatDate(monthAgo)} 至 ${formatDate(now)} 这段时间的内容`;
-            break;
-          case 'halfYear':
-            const halfYearAgo = new Date(now);
-            halfYearAgo.setMonth(now.getMonth() - 6);
-            dateRangeText = `，请主要搜索 ${formatDate(halfYearAgo)} 至 ${formatDate(now)} 这段时间的内容`;
-            break;
-          case 'year':
-            const yearAgo = new Date(now);
-            yearAgo.setFullYear(now.getFullYear() - 1);
-            dateRangeText = `，请主要搜索 ${formatDate(yearAgo)} 至 ${formatDate(now)} 这段时间的内容`;
-            break;
-          case 'custom':
-            if (dateFilter.startDate && dateFilter.endDate) {
-              dateRangeText = `，请主要搜索 ${formatDate(dateFilter.startDate)} 至 ${formatDate(dateFilter.endDate)} 这段时间的内容`;
-            }
-            break;
-        }
-
-        queryWithDateFilter += dateRangeText;
-      }
 
       // 在短暂延迟后生成时间轴
       setTimeout(async () => {

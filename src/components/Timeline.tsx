@@ -203,7 +203,7 @@ export function Timeline({ events, isLoading = false, onRequestDetails, summary 
           <CardHeader className="p-3 sm:p-6">
             <CardTitle className="text-base sm:text-xl flex items-center gap-2">
               <Clock className="h-4 w-4 sm:h-5 sm:w-5" />
-              时间脉络
+              重要事件
             </CardTitle>
             <CardDescription className="text-xs sm:text-sm">
               按时间顺序了解事件发展
@@ -244,7 +244,7 @@ export function Timeline({ events, isLoading = false, onRequestDetails, summary 
         <CardHeader className="p-3 sm:p-6">
           <CardTitle className="text-base sm:text-xl flex items-center gap-2">
             <Clock className="h-4 w-4 sm:h-5 sm:w-5" />
-            时间脉络
+            重要事件
           </CardTitle>
           <CardDescription className="text-xs sm:text-sm">
             按时间顺序了解事件发展
